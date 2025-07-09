@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "src/civ_backend"
+]
+resolver = "2"
