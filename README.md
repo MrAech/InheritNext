@@ -38,29 +38,6 @@
  dfx deploy
  ```
 
- ### Run Frontend (in a separate terminal)
-
- ```bash
- npm start
- ```
-
- - App: `http://localhost:8080`
- - Canisters: `http://localhost:4943`
-
- ### Generate Candid Interface (if needed)
-
- ```bash
- npm run generate
- ```
-
- ---
-
- ## 🌐 Deployment Notes
-
- - Set `DFX_NETWORK=ic` in production environments
- - Update `dfx.json` declarations if hosting frontend outside DFX
- - Use a custom `createActor` constructor for external integrations
-
  ---
 
  ## 📚 Documentation
@@ -88,6 +65,6 @@
 
  ## 📝 License
 
- MIT – feel free to use, modify, and build on top of this.
+ BSD 3-Clause "New" or "Revised" License – feel free to use, modify, and build on top of this.Dont forget to Give credits tho :) happy developing
 
  ---
