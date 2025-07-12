@@ -18,7 +18,9 @@ import {
   Wallet
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
+import { SettingsDialog } from "@/components/SettingsDialog";
+import { useSettings } from "@/context/SettingsContext";
 
 const Dashboard = () => {
   const { logout } = useAuth();
@@ -34,6 +36,7 @@ const Dashboard = () => {
   const [heirs, setHeirs] = useState<any[]>([]);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { formatCurrency } = useSettings();
 
   useEffect(() => {
     const updateCountdown = () => {
@@ -78,14 +81,16 @@ const Dashboard = () => {
     });
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
+  // NOTE: kept for fallback sake
+
+  // const formatCurrency = (amount: number) => {
+  //   return new Intl.NumberFormat('en-US', {
+  //     style: 'currency',
+  //     currency: 'USD',
+  //     minimumFractionDigits: 0,
+  //     maximumFractionDigits: 0,
+  //   }).format(amount);
+  // };
 
 
 
@@ -110,6 +115,7 @@ const Dashboard = () => {
               </div>
             </div>
             <div className="flex items-center space-x-4">
+              <SettingsDialog />
               <Button
                 variant="outline"
                 size="sm"

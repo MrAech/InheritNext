@@ -17,6 +17,7 @@ import {
   Home
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useSettings } from "@/context/SettingsContext";
 
 interface Asset {
   id: string;
@@ -69,6 +70,7 @@ const AssetsList = ({ onTotalChange, onAssetsChange }: AssetsListProps) => {
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
   const [isAddingAsset, setIsAddingAsset] = useState(false);
   const { toast } = useToast();
+  const { formatCurrency } = useSettings();
 
   // Initialize the parent component with assets data
   useEffect(() => {
@@ -135,14 +137,16 @@ const AssetsList = ({ onTotalChange, onAssetsChange }: AssetsListProps) => {
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
+  // NOTE: Kept for fallback sake
+  
+  // const formatCurrency = (amount: number) => {
+  //   return new Intl.NumberFormat('en-US', {
+  //     style: 'currency',
+  //     currency: 'USD',
+  //     minimumFractionDigits: 0,
+  //     maximumFractionDigits: 0,
+  //   }).format(amount);
+  // };
 
   return (
     <div className="space-y-4">
