@@ -7,11 +7,11 @@ import { AssetsList } from "@/components/AssetsList";
 import { HeirsList } from "@/components/HeirsList";
 import { TimerResetDialog } from "@/components/TimerResetDialog";
 import { AssetDistribution } from "@/components/AssetDistribution";
-import { 
-  DollarSign, 
-  TrendingUp, 
-  Users, 
-  Clock, 
+import {
+  DollarSign,
+  TrendingUp,
+  Users,
+  Clock,
   LogOut,
   RefreshCw,
   PieChart,
@@ -43,14 +43,14 @@ const Dashboard = () => {
       const now = new Date();
       const expiryDate = new Date(lastReset);
       expiryDate.setMonth(expiryDate.getMonth() + 1);
-      
+
       const diff = expiryDate.getTime() - now.getTime();
-      
+
       if (diff > 0) {
         const days = Math.floor(diff / (1000 * 60 * 60 * 24));
         const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
         const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        
+
         setTimeRemaining(`${days}d ${hours}h ${minutes}m`);
       } else {
         setTimeRemaining("Expired");
@@ -59,7 +59,7 @@ const Dashboard = () => {
 
     updateCountdown();
     const interval = setInterval(updateCountdown, 60000);
-    
+
     return () => clearInterval(interval);
   }, [lastReset]);
 
@@ -94,7 +94,7 @@ const Dashboard = () => {
 
 
 
-//   TODO: test with backend 
+  //   TODO: test with backend 
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}

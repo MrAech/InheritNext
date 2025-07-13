@@ -36,7 +36,7 @@ export const SettingsProvider = ({ children }: SettingsProviderProps) => {
     const stored = localStorage.getItem('currency') as Currency;
     return stored || 'INR';
   });
-    // Apply theme to document
+  // Apply theme to document
   useEffect(() => {
     localStorage.setItem('theme', theme);
     if (theme === 'light') {
