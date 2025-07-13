@@ -7,11 +7,11 @@ import { AssetsList } from "@/components/AssetsList";
 import { HeirsList } from "@/components/HeirsList";
 import { TimerResetDialog } from "@/components/TimerResetDialog";
 import { AssetDistribution } from "@/components/AssetDistribution";
-import { 
-  DollarSign, 
-  TrendingUp, 
-  Users, 
-  Clock, 
+import {
+  DollarSign,
+  TrendingUp,
+  Users,
+  Clock,
   LogOut,
   RefreshCw,
   PieChart,
@@ -43,14 +43,14 @@ const Dashboard = () => {
       const now = new Date();
       const expiryDate = new Date(lastReset);
       expiryDate.setMonth(expiryDate.getMonth() + 1);
-      
+
       const diff = expiryDate.getTime() - now.getTime();
-      
+
       if (diff > 0) {
         const days = Math.floor(diff / (1000 * 60 * 60 * 24));
         const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
         const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        
+
         setTimeRemaining(`${days}d ${hours}h ${minutes}m`);
       } else {
         setTimeRemaining("Expired");
@@ -59,7 +59,7 @@ const Dashboard = () => {
 
     updateCountdown();
     const interval = setInterval(updateCountdown, 60000);
-    
+
     return () => clearInterval(interval);
   }, [lastReset]);
 
@@ -94,7 +94,7 @@ const Dashboard = () => {
 
 
 
-//   TODO: test with backend 
+  //   TODO: test with backend 
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -102,17 +102,20 @@ const Dashboard = () => {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <div className="w-10 h-10 bg-gradient-primary rounded-lg flex items-center justify-center">
+              <div className="w-20 sm:w-28 md:w-32 lg:w-56 flex flex-col items-center justify-center shrink-0">
                 <img
-                  src="/favicons/android-chrome-192x192.png"
+                  src="/favicons/internext.png"
                   alt="InheritNext Logo"
-                  className="w-full h-full object-contain"
+                  className="w-full h-auto object-contain max-w-[80%] max-h-[80%]"
                 />
+                <p className="text-sm text-muted-foreground text-center mt-1 leading-tight">
+                  InheritNext - Asset Management System
+                </p>
               </div>
-              <div>
+              {/* <div>
                 <h1 className="text-2xl font-bold text-foreground">InheritNext</h1>
                 <p className="text-sm text-muted-foreground">Estate Management System</p>
-              </div>
+              </div> */}
             </div>
             <div className="flex items-center space-x-4">
               <SettingsDialog />

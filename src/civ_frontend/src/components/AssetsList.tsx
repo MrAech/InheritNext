@@ -1,18 +1,26 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { 
-  Edit, 
-  Trash2, 
-  Plus, 
-  Building, 
-  Car, 
-  Banknote, 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from "@/components/ui/dialog";
+import {
+  Edit,
+  Trash2,
+  Plus,
+  Building,
+  Car,
+  Banknote,
   TrendingUp,
   Home
 } from "lucide-react";
@@ -85,7 +93,7 @@ const AssetsList = ({ onTotalChange, onAssetsChange }: AssetsListProps) => {
   };
 
   const handleUpdateAsset = (updatedAsset: Asset) => {
-    const newAssets = assets.map(asset => 
+    const newAssets = assets.map(asset =>
       asset.id === updatedAsset.id ? updatedAsset : asset
     );
     setAssets(newAssets);
@@ -138,7 +146,7 @@ const AssetsList = ({ onTotalChange, onAssetsChange }: AssetsListProps) => {
   };
 
   // NOTE: Kept for fallback sake
-  
+
   // const formatCurrency = (amount: number) => {
   //   return new Intl.NumberFormat('en-US', {
   //     style: 'currency',
@@ -193,9 +201,9 @@ const AssetsList = ({ onTotalChange, onAssetsChange }: AssetsListProps) => {
                 <div className="flex space-x-2">
                   <Dialog open={editingAsset?.id === asset.id} onOpenChange={(open) => !open && setEditingAsset(null)}>
                     <DialogTrigger asChild>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         className="flex-1"
                         onClick={() => setEditingAsset(asset)}
                       >
@@ -212,9 +220,9 @@ const AssetsList = ({ onTotalChange, onAssetsChange }: AssetsListProps) => {
                       />
                     )}
                   </Dialog>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     className="flex-1 text-destructive hover:bg-destructive hover:text-destructive-foreground"
                     onClick={() => handleRemoveAsset(asset.id)}
                   >
@@ -278,8 +286,8 @@ const AssetFormDialog = ({ asset, onSubmit, onCancel, isEditing = false }: Asset
         </div>
         <div className="space-y-2">
           <Label htmlFor="type">Asset Type</Label>
-          <Select 
-            value={formData.type} 
+          <Select
+            value={formData.type}
             onValueChange={(value) => setFormData(prev => ({ ...prev, type: value }))}
           >
             <SelectTrigger>

@@ -1,6 +1,6 @@
 
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from "recharts";
+import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
 
 interface Asset {
   id: string;
@@ -81,7 +81,7 @@ const AssetDistributionChart = ({ asset, heirs, distributions }: AssetDistributi
           Total Value: {formatCurrency(asset.value)}
         </p>
       </div>
-      
+
       <ChartContainer config={chartConfig} className="h-[300px]">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
@@ -105,7 +105,7 @@ const AssetDistributionChart = ({ asset, heirs, distributions }: AssetDistributi
                   const value = data.value as number;
                   const name = data.payload?.name;
                   const inheritanceValue = (asset.value * value) / 100;
-                  
+
                   return (
                     <div className="rounded-lg border bg-background p-2 shadow-sm">
                       <div className="grid gap-2">
@@ -133,8 +133,8 @@ const AssetDistributionChart = ({ asset, heirs, distributions }: AssetDistributi
                 return null;
               }}
             />
-            <Legend 
-              verticalAlign="bottom" 
+            <Legend
+              verticalAlign="bottom"
               height={36}
               formatter={(value, entry) => (
                 <span className="text-sm" style={{ color: entry.color }}>
