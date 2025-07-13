@@ -32,11 +32,11 @@ const SignIn = () => {
           <div className="mx-auto w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-4">
             <Shield className="w-8 h-8 text-primary" />
           </div>
-          <h1 className="text-3xl font-bold text-primary-foreground mb-2">
+          <h1 className="text-3xl font-bold dark:text-white light:text-black mb-2">
             InheritNext
           </h1>
-          <p className="text-primary-foreground/80">
-            Secure estate management platform
+          <p className="dark:text-white/80 light:text-black/80">
+            Secure Inheritance management platform
           </p>
         </div>
 
