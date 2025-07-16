@@ -1,3 +1,40 @@
+type Asset = record {
+  id: text;
+  name: text;
+  value: float64;
+  asset_type: text;
+  owner_encrypted: text;
+};
+
+type Heir = record {
+  id: text;
+  name: text;
+  wallet_encrypted: text;
+  share_percentage: float64;
+};
+
+type Distribution = record {
+  asset_id: text;
+  heir_id: text;
+  share_percentage: float64;
+};
+
 service : {
-    "greet": (text) -> (text) query;
-}
+  toggle_encryption : () -> ();
+  get_encryption_status : () -> (bool);
+
+  get_assets : () -> (vec Asset);
+  add_asset : (Asset) -> ();
+  update_asset : (Asset) -> ();
+  delete_asset : (text) -> ();
+
+  get_heirs : () -> (vec Heir);
+  add_heir : (Heir) -> ();
+  update_heir : (Heir) -> ();
+  delete_heir : (text) -> ();
+
+  get_distributions : () -> (vec Distribution);
+  update_distribution : (Distribution) -> ();
+
+  execute_inheritance_transfer : () -> (text);
+};
