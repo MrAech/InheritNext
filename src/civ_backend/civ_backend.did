@@ -1,3 +1,53 @@
+type Asset = record {
+  id : nat64;
+  asset_type : text;
+  value : nat64;
+  name : text;
+  description : text;
+};
+
+type CivError = variant {
+  AssetNotFound;
+  InvalidHeirPercentage;
+  AssetExists;
+  HeirExists;
+  HeirNotFound;
+  Other : text;
+  UserNotFound;
+};
+
+type Heir = record {
+  id : nat64;
+  relationship : text;
+  name : text;
+  email : text;
+  address : text;
+  phone : text;
+  percentage : nat8;
+};
+
+type Result = variant { Ok; Err : CivError };
+
+type User = record {
+  timer : nat64;
+  heirs : vec Heir;
+  assets : vec Asset;
+  user : text;
+};
+
 service : {
-    "greet": (text) -> (text) query;
-}
+    // the __get_candid_interface_tmp_hack for development
+  __get_candid_interface_tmp_hack : () -> (text) query;
+  add_asset : (Asset) -> (Result);
+  add_heir : (Heir) -> (Result);
+  get_distribution : () -> (vec record { text; nat64 }) query;
+  get_timer : () -> (nat64) query;
+  get_user : () -> (opt User) query;
+  list_assets : () -> (vec Asset) query;
+  list_heirs : () -> (vec Heir) query;
+  remove_asset : (nat64) -> (Result);
+  remove_heir : (nat64) -> (Result);
+  reset_timer : () -> (Result);
+  update_asset : (Asset) -> (Result);
+  update_heir : (Heir) -> (Result);
+};
