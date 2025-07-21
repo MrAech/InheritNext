@@ -106,15 +106,12 @@ const Dashboard = () => {
                 <img
                   src="/favicons/internext.png"
                   alt="InheritNext Logo"
-                  className="w-full h-auto object-contain max-w-[80%] max-h-[80%]"
+                  className="w-full h-auto object-contain max-w-[80%] max-h-[75%]"
                 />
-                <p className="text-sm text-muted-foreground text-center mt-1 leading-tight">
-                  InheritNext - Asset Management System
-                </p>
               </div>
               {/* <div>
                 <h1 className="text-2xl font-bold text-foreground">InheritNext</h1>
-                <p className="text-sm text-muted-foreground">Estate Management System</p>
+                <p className="text-sm text-muted-foreground">Inheritance Management System</p>
               </div> */}
             </div>
             <div className="flex items-center space-x-4">
@@ -146,12 +143,12 @@ const Dashboard = () => {
                 <div className="flex items-center space-x-4">
                   <Clock className="w-8 h-8" />
                   <div>
-                    <h3 className="text-lg font-semibold">Estate Access Timer</h3>
+                    <h3 className="text-lg font-semibold">Inheritance Access Timer</h3>
                     <p className="text-primary-foreground/80">
                       Time remaining: {timeRemaining}
                     </p>
                     <p className="text-xs text-primary-foreground/60">
-                      Reset: {lastReset.toLocaleString()}
+                      Last Reset: {lastReset.toLocaleString()}
                     </p>
                   </div>
                 </div>
@@ -179,21 +176,21 @@ const Dashboard = () => {
                 {formatCurrency(totalAssets)}
               </div>
               <p className="text-xs text-muted-foreground">
-                Personal estate value
+                Personal asset value
               </p>
             </CardContent>
           </Card>
 
           <Card className="shadow-card">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Active Assets</CardTitle>
+              <CardTitle className="text-sm font-medium">Total Asset</CardTitle>
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{assets.length}</div>
-              <p className="text-xs text-muted-foreground">
+              {/* <p className="text-xs text-muted-foreground">
                 Total asset items
-              </p>
+              </p> */}
             </CardContent>
           </Card>
 
@@ -205,7 +202,7 @@ const Dashboard = () => {
             <CardContent>
               <div className="text-2xl font-bold">{heirs.length}</div>
               <p className="text-xs text-muted-foreground">
-                Active beneficiaries
+                Heirs
               </p>
             </CardContent>
           </Card>
