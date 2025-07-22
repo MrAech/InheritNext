@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -10,6 +9,15 @@ import { Separator } from "@/components/ui/separator";
 import { Share2, Plus, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AssetDistributionChart } from "@/components/AssetDistributionChart";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from "@/components/ui/dialog";
 
 interface Asset {
   id: string;
@@ -44,7 +52,7 @@ const AssetDistribution = ({ assets, heirs }: AssetDistributionProps) => {
 
   const handleAddDistribution = () => {
     const percentage = Number(percentageInput);
-    
+
     if (!selectedAsset || !selectedHeir || !percentageInput || percentage <= 0) {
       toast({
         title: "Invalid input",
@@ -56,7 +64,7 @@ const AssetDistribution = ({ assets, heirs }: AssetDistributionProps) => {
 
     const existingAssetDistributions = distributions.filter(d => d.assetId === selectedAsset);
     const totalPercentage = existingAssetDistributions.reduce((sum, d) => sum + d.percentage, 0);
-    
+
     if (totalPercentage + percentage > 100) {
       toast({
         title: "Percentage exceeded",
@@ -87,7 +95,7 @@ const AssetDistribution = ({ assets, heirs }: AssetDistributionProps) => {
 
   const handlePercentageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    
+
     // Allow empty string or valid numbers
     if (value === "" || (!isNaN(Number(value)) && Number(value) >= 0 && Number(value) <= 100)) {
       setPercentageInput(value);
@@ -206,7 +214,7 @@ const AssetDistribution = ({ assets, heirs }: AssetDistributionProps) => {
           const assetDistributions = getAssetDistributions(asset.id);
           const totalDistributed = getDistributionTotal(asset.id);
           const isComplete = totalDistributed === 100;
-          
+
           return (
             <Card key={asset.id} className="shadow-card">
               <CardHeader className="pb-3">
@@ -231,7 +239,7 @@ const AssetDistribution = ({ assets, heirs }: AssetDistributionProps) => {
                         {assetDistributions.map((distribution) => {
                           const heir = heirs.find(h => h.id === distribution.heirId);
                           const inheritanceValue = (asset.value * distribution.percentage) / 100;
-                          
+
                           return (
                             <div key={distribution.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                               <div className="flex items-center gap-3">
@@ -274,7 +282,7 @@ const AssetDistribution = ({ assets, heirs }: AssetDistributionProps) => {
 
                   {/* Pie Chart */}
                   <div>
-                    <AssetDistributionChart 
+                    <AssetDistributionChart
                       asset={asset}
                       heirs={heirs}
                       distributions={distributions}

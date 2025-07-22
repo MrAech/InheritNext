@@ -2,16 +2,21 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { 
-  Edit, 
-  Trash2, 
-  Plus, 
-  User, 
-  Users, 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter, DialogHeader, DialogTitle, DialogTrigger
+} from "@/components/ui/dialog";
+import {
+  Edit,
+  Trash2,
+  Plus,
+  User,
+  Users,
   Heart,
   Phone,
   Mail
@@ -86,7 +91,7 @@ const HeirsList = ({ onHeirsChange }: HeirsListProps = {}) => {
   };
 
   const handleUpdateHeir = (updatedHeir: Heir) => {
-    const newHeirs = heirs.map(heir => 
+    const newHeirs = heirs.map(heir =>
       heir.id === updatedHeir.id ? updatedHeir : heir
     );
     setHeirs(newHeirs);
@@ -163,7 +168,7 @@ const HeirsList = ({ onHeirsChange }: HeirsListProps = {}) => {
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span>Inheritance Distribution</span>
-            <Badge 
+            <Badge
               variant={isPercentageValid ? "secondary" : "destructive"}
               className="text-sm"
             >
@@ -171,7 +176,7 @@ const HeirsList = ({ onHeirsChange }: HeirsListProps = {}) => {
             </Badge>
           </CardTitle>
           <CardDescription>
-            {isPercentageValid 
+            {isPercentageValid
               ? "Distribution is complete and balanced."
               : `Distribution needs adjustment. ${totalPercentage > 100 ? 'Over' : 'Under'}-allocated by ${Math.abs(100 - totalPercentage)}%.`
             }
@@ -212,8 +217,8 @@ const HeirsList = ({ onHeirsChange }: HeirsListProps = {}) => {
                   <div>
                     <CardTitle className="text-lg">{heir.name}</CardTitle>
                     <CardDescription>
-                      <Badge 
-                        variant="outline" 
+                      <Badge
+                        variant="outline"
                         className={getRelationshipColor(heir.relationship)}
                       >
                         {heir.relationship}
@@ -242,9 +247,9 @@ const HeirsList = ({ onHeirsChange }: HeirsListProps = {}) => {
                 <div className="flex space-x-2">
                   <Dialog open={editingHeir?.id === heir.id} onOpenChange={(open) => !open && setEditingHeir(null)}>
                     <DialogTrigger asChild>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         className="flex-1"
                         onClick={() => setEditingHeir(heir)}
                       >
@@ -261,9 +266,9 @@ const HeirsList = ({ onHeirsChange }: HeirsListProps = {}) => {
                       />
                     )}
                   </Dialog>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     className="flex-1 text-destructive hover:bg-destructive hover:text-destructive-foreground"
                     onClick={() => handleRemoveHeir(heir.id)}
                   >

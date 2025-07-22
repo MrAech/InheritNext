@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Settings, Palette, DollarSign } from "lucide-react";
 import { useSettings, Theme, Currency } from "@/context/SettingsContext";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger
+} from "@/components/ui/dialog";
 
 const SettingsDialog = () => {
   const { theme, currency, setTheme, setCurrency } = useSettings();
@@ -87,7 +90,7 @@ const SettingsDialog = () => {
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={handleCancel}>
-            
+
           </Button>
           <Button type="submit" onClick={handleSave} className="bg-gradient-primary">
             Save Changes
