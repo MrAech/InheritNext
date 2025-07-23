@@ -31,7 +31,6 @@ const App = () => (
                   </ProtectedRoute>
                 }
               />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               {/* Catch-all route: redirect to sign-in for any invalid path */}
               <Route path="*" element={<SignIn />} />
             </Routes>

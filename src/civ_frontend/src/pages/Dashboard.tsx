@@ -39,7 +39,7 @@ const Dashboard = () => {
   const { toast } = useToast();
   const { formatCurrency } = useSettings();
 
-  // Fetch timer status from backend
+
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
     const fetchTimer = async () => {
@@ -106,7 +106,6 @@ const Dashboard = () => {
       if (ok) {
         const timer = await timerStatus();
         setTimeRemaining(timer ? `${timer} seconds` : "Expired");
-        // Reload assets and heirs from backend after reset
         try {
           const assetsData = await import("@/lib/api").then(m => m.listAssets());
           setAssets(await assetsData);
@@ -145,7 +144,7 @@ const Dashboard = () => {
     }
   };
 
-  // NOTE: kept for fallback sake
+  // NOTE: kept for fallback sake well for when i brick it 
 
   // const formatCurrency = (amount: number) => {
   //   return new Intl.NumberFormat('en-US', {

@@ -1,59 +1,74 @@
-# InheritNext Architecture & Integration Overview
+# InheritNext: Decentralized Inheritance Management System
 
-## Project Structure
-
-- **Backend (Rust/IC Canister)**
-  - Location: `src/civ_backend/`
-  - Models: Asset, Heir, Distribution
-  - API: Candid interface, per-asset inheritance, CRUD endpoints
-
-- **Frontend (TypeScript/React)**
-  - Location: `src/civ_frontend/`
-  - Components: Asset/Heir CRUD, Distribution, Dashboard
-  - API Layer: `src/civ_frontend/src/lib/api.ts`
-  - Types: `src/civ_frontend/src/types/backend.ts`
-  - Auth: Internet Identity via `@dfinity/auth-client`
-
-## Integration Flow
-
-1. **Authentication**
-   - User logs in via Internet Identity.
-   - Auth context provides identity and actor for secure backend calls.
-
-2. **API Service Layer**
-   - All frontend CRUD operations use the API layer for backend communication.
-   - Error handling, loading states, and success feedback are implemented.
-
-3. **Frontend Components**
-   - Assets and Heirs managed via React components.
-   - UI/UX feedback for all operations.
-   - Types are aligned with backend models, with frontend extensions for UX.
+InheritNext is a full-stack DFINITY (Internet Computer) application for secure, automated inheritance management. It enables users to register assets, assign heirs, and automate asset distribution based on customizable rules and timers.
 
 ## Architecture Diagram
 
+```mermaid
+flowchart TD
+    subgraph Frontend
+        A[User Dashboard]
+        B[AssetsList]
+        C[HeirsList]
+        D[AssetDistributionChart]
+        E[Timer & Notifications]
+    end
+    subgraph Backend
+        F[API Layer]
+        G[User Model]
+        H[Asset Model]
+        I[Heir Model]
+        J[Distribution Logic]
+        K[Timer Logic]
+    end
+    A --> F
+    B --> F
+    C --> F
+    D --> F
+    E --> F
+    F --> G
+    F --> H
+    F --> I
+    F --> J
+    F --> K
+    J --> H
+    J --> I
+    K --> J
 ```
-[User]
-   |
-[React Frontend]
-   |--[AuthContext]---[Internet Identity]
-   |--[API Layer]-----[DFINITY Agent/Candid]
-   |
-[IC Canister Backend]
-   |--[Rust Models]
-   |--[Candid API]
-```
 
-## Key Files
+## Features
 
-- [`src/civ_backend/civ_backend.did`](src/civ_backend/civ_backend.did:1): Backend API and types
-- [`src/civ_frontend/src/types/backend.ts`](src/civ_frontend/src/types/backend.ts:1): TypeScript interfaces
-- [`src/civ_frontend/src/lib/api.ts`](src/civ_frontend/src/lib/api.ts:1): API service layer
-- [`src/civ_frontend/src/context/AuthContext.tsx`](src/civ_frontend/src/context/AuthContext.tsx:1): Authentication/session management
-- [`src/civ_frontend/src/components/AssetsList.tsx`](src/civ_frontend/src/components/AssetsList.tsx:1): Asset CRUD UI
-- [`src/civ_frontend/src/components/HeirsList.tsx`](src/civ_frontend/src/components/HeirsList.tsx:1): Heir CRUD UI
+- User Authentication: Secure login and session management.
+- Asset Management: Add, view, update, and remove assets.
+- Heir Management: Add, view, update, and remove heirs.
+- Distribution Assignment: Assign asset distribution percentages to heirs.
+- Access Timer: Timer starts automatically when assets are added.
+- Auto Distribution: Assets are automatically distributed when timer expires.
+- Dashboard: Real-time overview of assets, heirs, timer status, and distribution warnings.
+- Error Handling: Robust handling of type mismatches, backend errors, and UI feedback.
+- Charts & Visualization: Asset distribution charts for clear visualization.
 
-## Notes
+## How It Works
 
-- All major flows are integrated and production-ready.
-- UI/UX, error handling, and session management are implemented.
-- Further improvements: accessibility, performance, security, i18n, analytics, rollback/recovery.
+1. Login and access dashboard.
+2. Add assets and heirs.
+3. Assign distributions.
+4. Timer controls asset distribution.
+5. Auto distribution on timer expiry.
+6. Visualization and notifications.
+
+## Tech Stack
+
+- Frontend: React, TypeScript, Vite, Tailwind CSS
+- Backend: Rust (DFINITY canister), Candid interface
+- State Management: React Context, Hooks
+- API Communication: Candid calls via frontend API layer
+
+## Project Structure
+
+- `src/civ_backend/`: Rust canister backend, API logic, models
+- `src/civ_frontend/`: React frontend, pages, components, context, hooks
+
+## License
+
+MIT
