@@ -25,7 +25,7 @@ pub fn get_distribution() -> Vec<(String, u64)> {
 }
 
 #[ic_cdk::query]
-pub fn get_timer() -> u64 {
+pub fn get_timer() -> i64 {
     api::get_timer()
 }
 

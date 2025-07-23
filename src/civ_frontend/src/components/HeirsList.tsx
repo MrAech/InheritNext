@@ -22,112 +22,144 @@ import {
   Mail
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-interface Heir {
-  id: string;
-  name: string;
-  relationship: string;
-  percentage: number;
-  email: string;
-  phone: string;
-  address: string;
-}
+import {
+  listHeirs,
+  addHeir,
+  updateHeir,
+  removeHeir
+} from "@/lib/api";
+import type { Heir, HeirInput } from "@/types/backend";
 
 interface HeirsListProps {
   onHeirsChange?: (heirs: Heir[]) => void;
 }
 
 const HeirsList = ({ onHeirsChange }: HeirsListProps = {}) => {
-  const [heirs, setHeirs] = useState<Heir[]>([
-    {
-      id: "1",
-      name: "Sarah Johnson",
-      relationship: "Daughter",
-      percentage: 40,
-      email: "sarah.johnson@email.com",
-      phone: "+1 (555) 123-4567",
-      address: "123 Oak Street, Beverly Hills, CA"
-    },
-    {
-      id: "2",
-      name: "Michael Johnson",
-      relationship: "Son",
-      percentage: 30,
-      email: "michael.johnson@email.com",
-      phone: "+1 (555) 234-5678",
-      address: "456 Pine Avenue, Los Angeles, CA"
-    },
-    {
-      id: "3",
-      name: "Emily Davis",
-      relationship: "Granddaughter",
-      percentage: 20,
-      email: "emily.davis@email.com",
-      phone: "+1 (555) 345-6789",
-      address: "789 Maple Drive, Santa Monica, CA"
-    },
-    {
-      id: "4",
-      name: "Children's Hospital Foundation",
-      relationship: "Charity",
-      percentage: 10,
-      email: "donations@childrenshospital.org",
-      phone: "+1 (555) 456-7890",
-      address: "321 Charity Lane, Los Angeles, CA"
-    }
-  ]);
-
+  const [heirs, setHeirs] = useState<Heir[]>([]);
+  const [loading, setLoading] = useState(true);
   const [editingHeir, setEditingHeir] = useState<Heir | null>(null);
   const [isAddingHeir, setIsAddingHeir] = useState(false);
   const { toast } = useToast();
 
-  // Initialize the parent component with heirs data
   useEffect(() => {
-    onHeirsChange?.(heirs);
+    async function fetchHeirs() {
+      setLoading(true);
+      try {
+        const data = await listHeirs();
+        setHeirs(data);
+        onHeirsChange?.(data);
+      } catch (err) {
+        toast({
+          title: "Error loading heirs",
+          description: String(err),
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchHeirs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const getTotalPercentage = () => {
-    return heirs.reduce((sum, heir) => sum + heir.percentage, 0);
+  const handleUpdateHeir = async (updatedHeir: Heir) => {
+    setLoading(true);
+    try {
+      const req: HeirInput = {
+        name: updatedHeir.name,
+        relationship: updatedHeir.relationship,
+        email: updatedHeir.email,
+        phone: updatedHeir.phone,
+        address: updatedHeir.address,
+      };
+      const ok = await updateHeir(updatedHeir.id, req);
+      if (ok) {
+        const data = await listHeirs();
+        setHeirs(data);
+        onHeirsChange?.(data);
+        setEditingHeir(null);
+        toast({
+          title: "Heir Updated",
+          description: `${updatedHeir.name}'s information has been successfully updated.`,
+        });
+      } else {
+        toast({
+          title: "Update Failed",
+          description: "Could not update heir.",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      toast({
+        title: "Error updating heir",
+        description: String(err),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleUpdateHeir = (updatedHeir: Heir) => {
-    const newHeirs = heirs.map(heir =>
-      heir.id === updatedHeir.id ? updatedHeir : heir
-    );
-    setHeirs(newHeirs);
-    onHeirsChange?.(newHeirs);
-    setEditingHeir(null);
-    toast({
-      title: "Heir Updated",
-      description: `${updatedHeir.name}'s information has been successfully updated.`,
-    });
+  const handleRemoveHeir = async (heirId: number) => {
+    setLoading(true);
+    try {
+      const ok = await removeHeir(heirId);
+      if (ok) {
+        const data = await listHeirs();
+        setHeirs(data);
+        onHeirsChange?.(data);
+        toast({
+          title: "Heir Removed",
+          description: `Heir has been removed from the beneficiaries.`,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Remove Failed",
+          description: "Could not remove heir.",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      toast({
+        title: "Error removing heir",
+        description: String(err),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleRemoveHeir = (heirId: string) => {
-    const heirToRemove = heirs.find(h => h.id === heirId);
-    const newHeirs = heirs.filter(heir => heir.id !== heirId);
-    setHeirs(newHeirs);
-    onHeirsChange?.(newHeirs);
-    toast({
-      title: "Heir Removed",
-      description: `${heirToRemove?.name} has been removed from the beneficiaries.`,
-      variant: "destructive",
-    });
-  };
-
-  const handleAddHeir = (newHeir: Omit<Heir, 'id'>) => {
-    const heir: Heir = {
-      ...newHeir,
-      id: Date.now().toString()
-    };
-    const newHeirs = [...heirs, heir];
-    setHeirs(newHeirs);
-    onHeirsChange?.(newHeirs);
-    setIsAddingHeir(false);
-    toast({
-      title: "Heir Added",
-      description: `${heir.name} has been added as a beneficiary.`,
-    });
+  const handleAddHeir = async (newHeir: HeirInput) => {
+    setLoading(true);
+    try {
+      const ok = await addHeir(newHeir);
+      if (ok) {
+        const data = await listHeirs();
+        setHeirs(data);
+        onHeirsChange?.(data);
+        setIsAddingHeir(false);
+        toast({
+          title: "Heir Added",
+          description: `${newHeir.name} has been added as a beneficiary.`,
+        });
+      } else {
+        toast({
+          title: "Add Failed",
+          description: "Could not add heir.",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      toast({
+        title: "Error adding heir",
+        description: String(err),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getRelationshipIcon = (relationship: string) => {
@@ -141,55 +173,10 @@ const HeirsList = ({ onHeirsChange }: HeirsListProps = {}) => {
     }
   };
 
-  const getRelationshipColor = (relationship: string) => {
-    switch (relationship) {
-      case "Spouse":
-        return "bg-pink-100 text-pink-800 border-pink-200";
-      case "Son":
-      case "Daughter":
-        return "bg-blue-100 text-blue-800 border-blue-200";
-      case "Granddaughter":
-      case "Grandson":
-        return "bg-purple-100 text-purple-800 border-purple-200";
-      case "Charity":
-        return "bg-green-100 text-green-800 border-green-200";
-      default:
-        return "bg-gray-100 text-gray-800 border-gray-200";
-    }
-  };
-
-  const totalPercentage = getTotalPercentage();
-  const isPercentageValid = totalPercentage === 100;
-
   return (
     <div className="space-y-6">
-      {/* Percentage Summary */}
-      <Card className="shadow-card">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>Inheritance Distribution</span>
-            <Badge
-              variant={isPercentageValid ? "secondary" : "destructive"}
-              className="text-sm"
-            >
-              {totalPercentage}% Total
-            </Badge>
-          </CardTitle>
-          <CardDescription>
-            {isPercentageValid
-              ? "Distribution is complete and balanced."
-              : `Distribution needs adjustment. ${totalPercentage > 100 ? 'Over' : 'Under'}-allocated by ${Math.abs(100 - totalPercentage)}%.`
-            }
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Progress value={totalPercentage} className="h-3" />
-        </CardContent>
-      </Card>
-
-      {/* Controls */}
       <div className="flex justify-between items-center">
-        <p className="text-muted-foreground">Manage beneficiaries and their inheritance percentages</p>
+        <p className="text-muted-foreground">Manage beneficiaries and their inheritance relationships</p>
         <Dialog open={isAddingHeir} onOpenChange={setIsAddingHeir}>
           <DialogTrigger asChild>
             <Button size="sm" className="bg-gradient-success">
@@ -204,90 +191,84 @@ const HeirsList = ({ onHeirsChange }: HeirsListProps = {}) => {
         </Dialog>
       </div>
 
-      {/* Heirs List */}
-      <div className="grid gap-4 md:grid-cols-2">
-        {heirs.map((heir) => (
-          <Card key={heir.id} className="shadow-card hover:shadow-elegant transition-shadow">
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                    {getRelationshipIcon(heir.relationship)}
+      {loading ? (
+        <div className="text-center text-muted-foreground py-8">Loading heirs...</div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {heirs.map((heir) => (
+            <Card key={heir.id} className="shadow-card hover:shadow-elegant transition-shadow">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 bg-primary/10 rounded-lg text-primary">
+                      {getRelationshipIcon(heir.relationship)}
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg">{heir.name}</CardTitle>
+                      <CardDescription>
+                        <Badge
+                          variant="outline"
+                        >
+                          {heir.relationship}
+                        </Badge>
+                      </CardDescription>
+                    </div>
                   </div>
-                  <div>
-                    <CardTitle className="text-lg">{heir.name}</CardTitle>
-                    <CardDescription>
-                      <Badge
-                        variant="outline"
-                        className={getRelationshipColor(heir.relationship)}
-                      >
-                        {heir.relationship}
-                      </Badge>
-                    </CardDescription>
+                  <div className="text-right">
+                    <div className="text-sm text-muted-foreground">{heir.email}</div>
+                    <div className="text-sm text-muted-foreground">{heir.phone}</div>
+                    <div className="text-sm text-muted-foreground">{heir.address}</div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-2xl font-bold text-primary">{heir.percentage}%</div>
-                  <div className="text-sm text-muted-foreground">inheritance</div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {/* Additional fields can be shown here if backend is extended */}
                 </div>
+              </CardContent>
+              <div className="flex space-x-2 px-4 pb-4">
+                <Dialog open={editingHeir?.id === heir.id} onOpenChange={(open) => !open && setEditingHeir(null)}>
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => setEditingHeir(heir)}
+                    >
+                      <Edit className="w-4 h-4 mr-2" />
+                      Update
+                    </Button>
+                  </DialogTrigger>
+                  {editingHeir && (
+                    <HeirFormDialog
+                      heir={editingHeir}
+                      onSubmit={handleUpdateHeir}
+                      onCancel={() => setEditingHeir(null)}
+                      isEditing
+                    />
+                  )}
+                </Dialog>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                  onClick={() => handleRemoveHeir(heir.id)}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Remove
+                </Button>
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Mail className="w-4 h-4" />
-                    {heir.email}
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Phone className="w-4 h-4" />
-                    {heir.phone}
-                  </div>
-                </div>
-                <div className="flex space-x-2">
-                  <Dialog open={editingHeir?.id === heir.id} onOpenChange={(open) => !open && setEditingHeir(null)}>
-                    <DialogTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => setEditingHeir(heir)}
-                      >
-                        <Edit className="w-4 h-4 mr-2" />
-                        Update
-                      </Button>
-                    </DialogTrigger>
-                    {editingHeir && (
-                      <HeirFormDialog
-                        heir={editingHeir}
-                        onSubmit={handleUpdateHeir}
-                        onCancel={() => setEditingHeir(null)}
-                        isEditing
-                      />
-                    )}
-                  </Dialog>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                    onClick={() => handleRemoveHeir(heir.id)}
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Remove
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
 
 interface HeirFormDialogProps {
   heir?: Heir;
-  onSubmit: (heir: Heir | Omit<Heir, 'id'>) => void;
+  onSubmit: (heir: Heir | HeirInput) => void;
   onCancel: () => void;
   isEditing?: boolean;
 }
@@ -296,10 +277,9 @@ const HeirFormDialog = ({ heir, onSubmit, onCancel, isEditing = false }: HeirFor
   const [formData, setFormData] = useState({
     name: heir?.name || "",
     relationship: heir?.relationship || "",
-    percentage: heir?.percentage || 0,
     email: heir?.email || "",
     phone: heir?.phone || "",
-    address: heir?.address || ""
+    address: heir?.address || "",
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -333,46 +313,22 @@ const HeirFormDialog = ({ heir, onSubmit, onCancel, isEditing = false }: HeirFor
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="relationship">Relationship</Label>
-          <Input
-            id="relationship"
-            value={formData.relationship}
-            onChange={(e) => setFormData(prev => ({ ...prev, relationship: e.target.value }))}
-            placeholder="e.g., Son, Daughter, Spouse, Charity"
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="percentage">Inheritance Percentage (%)</Label>
-          <Input
-            id="percentage"
-            type="number"
-            min="0"
-            max="100"
-            value={formData.percentage}
-            onChange={(e) => setFormData(prev => ({ ...prev, percentage: Number(e.target.value) }))}
-            placeholder="Enter percentage"
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="email">Email Address</Label>
+          <Label htmlFor="email">Email</Label>
           <Input
             id="email"
-            type="email"
             value={formData.email}
             onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-            placeholder="Enter email address"
+            placeholder="Enter email"
             required
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="phone">Phone Number</Label>
+          <Label htmlFor="phone">Phone</Label>
           <Input
             id="phone"
             value={formData.phone}
             onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-            placeholder="Enter phone number"
+            placeholder="Enter phone"
             required
           />
         </div>
@@ -382,7 +338,17 @@ const HeirFormDialog = ({ heir, onSubmit, onCancel, isEditing = false }: HeirFor
             id="address"
             value={formData.address}
             onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
-            placeholder="Enter full address"
+            placeholder="Enter address"
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="relationship">Relationship</Label>
+          <Input
+            id="relationship"
+            value={formData.relationship}
+            onChange={(e) => setFormData(prev => ({ ...prev, relationship: e.target.value }))}
+            placeholder="e.g., Son, Daughter, Spouse, Charity"
             required
           />
         </div>

@@ -3,6 +3,7 @@ import { AuthClient } from "@dfinity/auth-client";
 import { Actor, ActorSubclass, Identity } from "@dfinity/agent";
 import { _SERVICE } from "@/../../declarations/civ_backend/civ_backend.did";
 import { createActor } from "@/../../declarations/civ_backend";
+import { resetTimer } from "@/lib/api";
 
 const network = process.env.DFX_NETWORK || "local";
 const canisterId = process.env.CANISTER_ID_CIV_BACKEND;
@@ -59,6 +60,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             agentOptions: { identity },
           });
           setActor(actor);
+          await resetTimer();
         }
       },
     });

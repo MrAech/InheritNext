@@ -22,46 +22,72 @@ import { useAuth } from "@/context/AuthContext";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { useSettings } from "@/context/SettingsContext";
 
+import { timerStatus, resetTimer, assignDistributions } from "@/lib/api";
+
 const Dashboard = () => {
   const { logout } = useAuth();
   const [totalAssets, setTotalAssets] = useState(2850000);
   const [timerResetOpen, setTimerResetOpen] = useState(false);
-  const [loginTime] = useState<Date>(() => {
-    const stored = localStorage.getItem("loginTime");
-    return stored ? new Date(stored) : new Date();
-  });
-  const [lastReset, setLastReset] = useState<Date>(loginTime);
+  const [lastReset, setLastReset] = useState<Date | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<string>("");
+  const [timerLoading, setTimerLoading] = useState(false);
+  const [timerError, setTimerError] = useState<string | null>(null);
   const [assets, setAssets] = useState<any[]>([]);
   const [heirs, setHeirs] = useState<any[]>([]);
+  const [distributionWarning, setDistributionWarning] = useState<string | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
   const { formatCurrency } = useSettings();
 
+  // Fetch timer status from backend
   useEffect(() => {
-    const updateCountdown = () => {
-      const now = new Date();
-      const expiryDate = new Date(lastReset);
-      expiryDate.setMonth(expiryDate.getMonth() + 1);
-
-      const diff = expiryDate.getTime() - now.getTime();
-
-      if (diff > 0) {
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-
-        setTimeRemaining(`${days}d ${hours}h ${minutes}m`);
-      } else {
-        setTimeRemaining("Expired");
+    let interval: ReturnType<typeof setInterval>;
+    const fetchTimer = async () => {
+      setTimerLoading(true);
+      setTimerError(null);
+      try {
+        const timer = await timerStatus();
+        if (assets.length === 0 || timer === -1) {
+          setTimeRemaining("");
+          setDistributionWarning(null);
+        } else {
+          setTimeRemaining(timer ? `${timer} seconds` : "Expired");
+          if (timer === 0) {
+            setDistributionWarning("Timer expired! Assets will be auto-distributed.");
+            try {
+              for (const asset of assets) {
+                const distributions = asset.distributions || [];
+                if (distributions.length > 0) {
+                  await assignDistributions(distributions);
+                }
+              }
+              toast({
+                title: "Auto Distribution",
+                description: "Assets have been auto-distributed due to timer expiry.",
+              });
+            } catch (err) {
+              toast({
+                title: "Distribution Error",
+                description: "Failed to auto-distribute assets.",
+                variant: "destructive",
+              });
+            }
+          } else {
+            setDistributionWarning(null);
+          }
+        }
+      } catch (err: any) {
+        setTimerError("Failed to fetch timer status.");
+      } finally {
+        setTimerLoading(false);
       }
     };
 
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 60000);
+    fetchTimer();
+    interval = setInterval(fetchTimer, 60000);
 
     return () => clearInterval(interval);
-  }, [lastReset]);
+  }, [assets]);
 
   const handleSignOut = async () => {
     await logout();
@@ -72,13 +98,51 @@ const Dashboard = () => {
     navigate("/");
   };
 
-  const handleTimerReset = () => {
-    setLastReset(new Date());
-    setTimerResetOpen(false);
-    toast({
-      title: "Timer Reset",
-      description: "Dashboard timer has been successfully reset.",
-    });
+  const handleTimerReset = async () => {
+    setTimerLoading(true);
+    setTimerError(null);
+    try {
+      const ok = await resetTimer();
+      if (ok) {
+        const timer = await timerStatus();
+        setTimeRemaining(timer ? `${timer} seconds` : "Expired");
+        // Reload assets and heirs from backend after reset
+        try {
+          const assetsData = await import("@/lib/api").then(m => m.listAssets());
+          setAssets(await assetsData);
+          const heirsData = await import("@/lib/api").then(m => m.listHeirs());
+          setHeirs(await heirsData);
+        } catch (err) {
+          toast({
+            title: "Reload Error",
+            description: "Failed to reload assets/heirs after reset.",
+            variant: "destructive",
+          });
+        }
+        setDistributionWarning(null);
+        toast({
+          title: "Timer Reset",
+          description: "Dashboard timer has been successfully reset.",
+        });
+      } else {
+        setTimerError("Failed to reset timer.");
+        toast({
+          title: "Timer Error",
+          description: "Failed to reset timer.",
+          variant: "destructive",
+        });
+      }
+    } catch (err: any) {
+      setTimerError("Failed to reset timer.");
+      toast({
+        title: "Timer Error",
+        description: "Failed to reset timer.",
+        variant: "destructive",
+      });
+    } finally {
+      setTimerLoading(false);
+      setTimerResetOpen(false);
+    }
   };
 
   // NOTE: kept for fallback sake
@@ -137,31 +201,47 @@ const Dashboard = () => {
       <main className="container mx-auto px-4 py-8">
         {/* Timer Status */}
         <div className="mb-8">
-          <Card className="bg-gradient-primary text-primary-foreground border-0">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
+          {timeRemaining === "" ? (
+            <Card className="bg-gradient-primary text-primary-foreground border-0">
+              <CardContent className="p-6">
                 <div className="flex items-center space-x-4">
                   <Clock className="w-8 h-8" />
                   <div>
                     <h3 className="text-lg font-semibold">Inheritance Access Timer</h3>
                     <p className="text-primary-foreground/80">
-                      Time remaining: {timeRemaining}
-                    </p>
-                    <p className="text-xs text-primary-foreground/60">
-                      Last Reset: {lastReset.toLocaleString()}
+                      Timer will start automatically when you add your first asset.
                     </p>
                   </div>
                 </div>
-                <Button
-                  variant="secondary"
-                  onClick={() => setTimerResetOpen(true)}
-                  className="sm:hidden"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="bg-gradient-primary text-primary-foreground border-0">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <Clock className="w-8 h-8" />
+                    <div>
+                      <h3 className="text-lg font-semibold">Inheritance Access Timer</h3>
+                      <p className="text-primary-foreground/80">
+                        Time remaining: {timeRemaining}
+                      </p>
+                      <p className="text-xs text-primary-foreground/60">
+                        Last Reset: {lastReset ? lastReset.toLocaleString() : "N/A"}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setTimerResetOpen(true)}
+                    className="sm:hidden"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Total Assets Overview */}
@@ -217,7 +297,39 @@ const Dashboard = () => {
             </h2>
             <Badge variant="secondary">Updated 2 hours ago</Badge>
           </div>
-          <AssetsList onTotalChange={setTotalAssets} onAssetsChange={setAssets} />
+          <AssetsList
+            onTotalChange={setTotalAssets}
+            onAssetsChange={setAssets}
+            onAssetAdded={async () => {
+              console.log("onAssetAdded callback triggered");
+              setTimerLoading(true);
+              try {
+                // Fetch latest assets before checking timer
+                const assetsData = await import("@/lib/api").then(m => m.listAssets());
+                setAssets(await assetsData);
+                let timer = await timerStatus();
+                if (typeof timer === "bigint") {
+                  timer = Number(timer);
+                }
+                console.log("Timer value after asset added:", timer);
+                if ((assetsData.length === 0) || timer === -1) {
+                  setTimeRemaining("");
+                  setDistributionWarning(null);
+                } else {
+                  setTimeRemaining(timer ? `${timer} seconds` : "Expired");
+                  if (timer === 0) {
+                    setDistributionWarning("Timer expired! Assets will be auto-distributed.");
+                  } else {
+                    setDistributionWarning(null);
+                  }
+                }
+              } catch {
+                setTimerError("Failed to fetch timer status.");
+              } finally {
+                setTimerLoading(false);
+              }
+            }}
+          />
         </div>
 
         {/* Heirs Section */}

@@ -13,19 +13,21 @@ pub fn add_asset(new_asset: AssetInput) -> Result<(), CivError> {
     let user = user_id();
     USERS.with(|users| {
         let mut users = users.borrow_mut();
+        let _now = ic_cdk::api::time();
         let user = users.entry(user.clone()).or_insert(User {
             user: user.clone(),
             assets: Vec::new(),
             heirs: Vec::new(),
             distributions: Vec::new(),
-            timer: 0,
+            timer_expiry: 0,
+            distributed: false,
         });
-        if user.assets.iter().any(|a| a.id == new_asset.id) {
-            return Err(CivError::AssetExists);
-        }
-        let now = ic_cdk::api::time();
+        // Auto-generate unique asset ID
+        let next_id = user.assets.iter().map(|a| a.id).max().unwrap_or(0) + 1;
+        let now_ns = ic_cdk::api::time();
+        let now = now_ns / 1_000_000_000; // convert nanoseconds to seconds
         user.assets.push(Asset {
-            id: new_asset.id,
+            id: next_id,
             name: new_asset.name,
             asset_type: new_asset.asset_type,
             value: new_asset.value,
@@ -33,6 +35,11 @@ pub fn add_asset(new_asset: AssetInput) -> Result<(), CivError> {
             created_at: now,
             updated_at: now,
         });
+        // If asset count is 1 or greater and timer not set, start the timer
+        if user.assets.len() >= 1 && user.timer_expiry == 0 {
+            user.timer_expiry = now + 30 * 24 * 60 * 60;
+            user.distributed = false;
+        }
         Ok(())
     })
 }
@@ -41,19 +48,21 @@ pub fn add_heir(new_heir: HeirInput) -> Result<(), CivError> {
     let user = user_id();
     USERS.with(|users| {
         let mut users = users.borrow_mut();
+        let now = ic_cdk::api::time();
         let user = users.entry(user.clone()).or_insert(User {
             user: user.clone(),
             assets: Vec::new(),
             heirs: Vec::new(),
             distributions: Vec::new(),
-            timer: 0,
+            timer_expiry: now + 30 * 24 * 60 * 60,
+            distributed: false,
         });
-        if user.heirs.iter().any(|h| h.id == new_heir.id) {
-            return Err(CivError::HeirExists);
-        }
+        // Auto-generate unique heir ID
+        let next_id = user.heirs.iter().map(|h| h.id).max().unwrap_or(0) + 1;
+        ic_cdk::println!("add_heir: generated heir id = {}", next_id);
         let now = ic_cdk::api::time();
         user.heirs.push(Heir {
-            id: new_heir.id,
+            id: next_id,
             name: new_heir.name,
             relationship: new_heir.relationship,
             email: new_heir.email,
@@ -70,12 +79,14 @@ pub fn assign_distributions(distributions: Vec<AssetDistribution>) -> Result<(),
     let user = user_id();
     USERS.with(|users| {
         let mut users = users.borrow_mut();
+        let now = ic_cdk::api::time();
         let user = users.entry(user.clone()).or_insert(User {
             user: user.clone(),
             assets: Vec::new(),
             heirs: Vec::new(),
             distributions: Vec::new(),
-            timer: 0,
+            timer_expiry: now + 30 * 24 * 60 * 60,
+            distributed: false,
         });
 
 
@@ -112,11 +123,38 @@ pub fn get_distribution() -> Vec<(String, u64)> {
     })
 }
 
-pub fn get_timer() -> u64 {
+pub fn get_timer() -> i64 {
     let user = user_id();
     USERS.with(|users| {
-        let users = users.borrow();
-        users.get(&user).map(|u| u.timer).unwrap_or(0)
+        let mut users = users.borrow_mut();
+        if let Some(user) = users.get_mut(&user) {
+            let now_ns = ic_cdk::api::time();
+            let now = now_ns / 1_000_000_000; // convert nanoseconds to seconds
+            ic_cdk::println!("get_timer: asset_count={}, timer_expiry={}", user.assets.len(), user.timer_expiry);
+            // If no assets, timer not started
+            if user.assets.is_empty() {
+                ic_cdk::println!("get_timer: no assets, returning -1");
+                return -1; // Sentinel value for "not started"
+            }
+            // If asset count is 1 or greater and timer not set, start the timer
+            if user.assets.len() >= 1 && user.timer_expiry == 0 {
+                user.timer_expiry = now + 30 * 24 * 60 * 60;
+                user.distributed = false;
+                ic_cdk::println!("get_timer: timer started, expiry={}", user.timer_expiry);
+            }
+            if user.timer_expiry < now && !user.distributed && !user.assets.is_empty() {
+                // Timer expired, auto-distribute: clear assets/distributions and set distributed flag
+                user.assets.clear();
+                user.distributions.clear();
+                user.distributed = true;
+                ic_cdk::println!("get_timer: timer expired, assets cleared");
+            }
+            let remaining = user.timer_expiry.saturating_sub(now) as i64;
+            ic_cdk::println!("get_timer: returning remaining={}", remaining);
+            remaining
+        } else {
+            -1
+        }
     })
 }
 
@@ -182,8 +220,11 @@ pub fn reset_timer() -> Result<(), CivError> {
     let user = user_id();
     USERS.with(|users| {
         let mut users = users.borrow_mut();
+        let now_ns = ic_cdk::api::time();
+        let now = now_ns / 1_000_000_000; // convert nanoseconds to seconds
         if let Some(user) = users.get_mut(&user) {
-            user.timer = 0;
+            user.timer_expiry = now + 30 * 24 * 60 * 60;
+            user.distributed = false;
             Ok(())
         } else {
             Err(CivError::UserNotFound)
@@ -233,8 +274,3 @@ pub fn update_heir(heir_id: u64, new_heir: HeirInput) -> Result<(), CivError> {
         }
     })
 }
-
-
-
-
-

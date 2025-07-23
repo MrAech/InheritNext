@@ -13,7 +13,6 @@ pub struct Asset {
 }
 #[derive(Clone, CandidType, Deserialize)]
 pub struct AssetInput {
-    pub id: u64,
     pub name: String,
     pub asset_type: String,
     pub value: u64,
@@ -23,7 +22,6 @@ pub struct AssetInput {
 
 #[derive(Clone, CandidType, Deserialize)]
 pub struct HeirInput {
-    pub id: u64,
     pub name: String,
     pub relationship: String,
     pub email: String,
@@ -59,7 +57,8 @@ pub struct User {
     pub assets: Vec<Asset>,
     pub heirs: Vec<Heir>,
     pub distributions: Vec<AssetDistribution>,
-    pub timer: u64,
+    pub timer_expiry: u64,
+    pub distributed: bool,
 }
 
 
@@ -75,4 +74,3 @@ pub enum CivError {
     DistributionAssetNotFound,
     DistributionHeirNotFound,
 }
-
