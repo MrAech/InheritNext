@@ -1,70 +1,59 @@
- # 🧬 Cross-Chain Inheritance Vault (CIV)
+# InheritNext Architecture & Integration Overview
 
- The **Cross-Chain Inheritance Vault (CIV)** is a decentralized platform designed to help users **securely plan, manage, and automate the inheritance and recovery of their crypto assets** across multiple blockchain networks.
+## Project Structure
 
- This project aims to solve real-world issues like forgotten keys, lost wallets, and the lack of structured digital asset inheritance by offering a smart contract-based solution with advanced security, cross-chain compatibility, and user-centric features.
+- **Backend (Rust/IC Canister)**
+  - Location: `src/civ_backend/`
+  - Models: Asset, Heir, Distribution
+  - API: Candid interface, per-asset inheritance, CRUD endpoints
 
- ---
+- **Frontend (TypeScript/React)**
+  - Location: `src/civ_frontend/`
+  - Components: Asset/Heir CRUD, Distribution, Dashboard
+  - API Layer: `src/civ_frontend/src/lib/api.ts`
+  - Types: `src/civ_frontend/src/types/backend.ts`
+  - Auth: Internet Identity via `@dfinity/auth-client`
 
- ## 🚀 Features
+## Integration Flow
 
- - 🔐 **Smart Contract-Based Inheritance Logic**
- - 🧠 **Proof-of-Life Verification System**
- - 🔄 **Cross-Chain Asset Handling (Bitcoin, Ethereum, ICP, and more)**
- - 💼 **Multi-Signature & Time-Locked Transfers**
- - 🧾 **User Wallet Recovery Registration**
- - 🔒 **Zero-Knowledge & MFA Security**
- - 📊 **Scalable, Auditable, and Compliant**
+1. **Authentication**
+   - User logs in via Internet Identity.
+   - Auth context provides identity and actor for secure backend calls.
 
- ---
+2. **API Service Layer**
+   - All frontend CRUD operations use the API layer for backend communication.
+   - Error handling, loading states, and success feedback are implemented.
 
- ## 🛠️ Local Development
+3. **Frontend Components**
+   - Assets and Heirs managed via React components.
+   - UI/UX feedback for all operations.
+   - Types are aligned with backend models, with frontend extensions for UX.
 
- ### Install Dependencies
+## Architecture Diagram
 
- ```bash
- npm install
- ```
+```
+[User]
+   |
+[React Frontend]
+   |--[AuthContext]---[Internet Identity]
+   |--[API Layer]-----[DFINITY Agent/Candid]
+   |
+[IC Canister Backend]
+   |--[Rust Models]
+   |--[Candid API]
+```
 
- ### Start Local ICP Replica
+## Key Files
 
- ```bash
- dfx start --background
- ```
+- [`src/civ_backend/civ_backend.did`](src/civ_backend/civ_backend.did:1): Backend API and types
+- [`src/civ_frontend/src/types/backend.ts`](src/civ_frontend/src/types/backend.ts:1): TypeScript interfaces
+- [`src/civ_frontend/src/lib/api.ts`](src/civ_frontend/src/lib/api.ts:1): API service layer
+- [`src/civ_frontend/src/context/AuthContext.tsx`](src/civ_frontend/src/context/AuthContext.tsx:1): Authentication/session management
+- [`src/civ_frontend/src/components/AssetsList.tsx`](src/civ_frontend/src/components/AssetsList.tsx:1): Asset CRUD UI
+- [`src/civ_frontend/src/components/HeirsList.tsx`](src/civ_frontend/src/components/HeirsList.tsx:1): Heir CRUD UI
 
- ### Deploy Canisters
+## Notes
 
- ```bash
- dfx deploy
- ```
-
- ---
-
- ## 📚 Documentation
-
- - [Internet Computer Docs](https://internetcomputer.org/docs/current/)
- - [Rust Canister Development](https://internetcomputer.org/docs/current/developer-docs/backend/rust/)
- - [Candid Interface Guide](https://internetcomputer.org/docs/current/developer-docs/backend/candid/)
-
- ---
-
- ## 📦 Future Roadmap
-
- - [ ] Cross-chain bridge module (BTC, ETH, ICP)
- - [ ] Inheritance rule customization (multi-generation, asset splitting)
- - [ ] Legal compliance layer (AML/KYC, estate law)
- - [ ] Institutional-grade support
-
- ---
-
- ## 🧑‍💻 Contributing
-
- We’re just getting started! If you're interested in contributing, stay tuned as the repo evolves. PRs, issues, and ideas are all welcome.
-
- ---
-
- ## 📝 License
-
- BSD 3-Clause "New" or "Revised" License – feel free to use, modify, and build on top of this.Dont forget to Give credits tho :) happy developing
-
- ---
+- All major flows are integrated and production-ready.
+- UI/UX, error handling, and session management are implemented.
+- Further improvements: accessibility, performance, security, i18n, analytics, rollback/recovery.

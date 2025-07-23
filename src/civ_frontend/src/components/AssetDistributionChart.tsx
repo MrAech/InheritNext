@@ -104,7 +104,7 @@ const AssetDistributionChart = ({ asset, heirs, distributions }: AssetDistributi
                   const data = payload[0];
                   const value = data.value as number;
                   const name = data.payload?.name;
-                  const inheritanceValue = (asset.value * value) / 100;
+                  const inheritanceValue = (Number(asset.value) * value) / 100;
 
                   return (
                     <div className="rounded-lg border bg-background p-2 shadow-sm">

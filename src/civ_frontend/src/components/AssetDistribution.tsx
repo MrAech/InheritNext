@@ -238,7 +238,7 @@ const AssetDistribution = ({ assets, heirs }: AssetDistributionProps) => {
                       <div className="space-y-3">
                         {assetDistributions.map((distribution) => {
                           const heir = heirs.find(h => h.id === distribution.heirId);
-                          const inheritanceValue = (asset.value * distribution.percentage) / 100;
+                          const inheritanceValue = (Number(asset.value) * distribution.percentage) / 100;
 
                           return (
                             <div key={distribution.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">

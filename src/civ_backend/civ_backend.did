@@ -9,7 +9,6 @@ type Asset = record {
 };
 
 type AssetInput = record {
-  id: nat64;
   asset_type: text;
   value: nat64;
   name: text;
@@ -46,7 +45,6 @@ type Heir = record {
 };
 
 type HeirInput = record {
-  id: nat64;
   relationship: text;
   name: text;
   email: text;
@@ -73,7 +71,7 @@ service : {
   add_heir: (HeirInput) -> (Result);
   assign_distributions: (vec AssetDistribution) -> (Result);
   get_distribution: () -> (vec record { text; nat64 }) query;
-  get_timer: () -> (nat64) query;
+  get_timer: () -> (int) query;
   get_user: () -> (opt User) query;
   list_assets: () -> (vec Asset) query;
   list_heirs: () -> (vec Heir) query;

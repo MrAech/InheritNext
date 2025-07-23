@@ -11,29 +11,34 @@ import '@/App.css';
 
 const queryClient = new QueryClient();
 
+import { AuthProvider } from "@/context/AuthContext";
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <SettingsProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<SignIn />} />
-            <Route 
-              path="/dashboard" 
-              element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              } 
-            />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<SignIn />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </SettingsProvider>
+    <AuthProvider>
+      <SettingsProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<SignIn />} />
+              <Route
+                path="/dashboard"
+                element={
+                  <ProtectedRoute>
+                    <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              {/* Catch-all route: redirect to sign-in for any invalid path */}
+              <Route path="*" element={<SignIn />} />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </SettingsProvider>
+    </AuthProvider>
   </QueryClientProvider>
 );
 
