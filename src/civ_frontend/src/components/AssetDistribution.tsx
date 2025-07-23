@@ -96,7 +96,6 @@ const AssetDistribution = ({ assets, heirs }: AssetDistributionProps) => {
   const handlePercentageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
 
-    // Allow empty string or valid numbers
     if (value === "" || (!isNaN(Number(value)) && Number(value) >= 0 && Number(value) <= 100)) {
       setPercentageInput(value);
     }

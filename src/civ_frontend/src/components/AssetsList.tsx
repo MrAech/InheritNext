@@ -145,7 +145,6 @@ const AssetsList = ({ onTotalChange, onAssetsChange, onAssetAdded }: AssetsListP
       const assetToSend = { ...newAsset, value: BigInt(newAsset.value) };
       const ok = await addAsset(assetToSend);
       if (ok) {
-        // Only update assets from backend after successful save
         try {
           const data = await listAssets();
           setAssets(data);
@@ -165,7 +164,6 @@ const AssetsList = ({ onTotalChange, onAssetsChange, onAssetAdded }: AssetsListP
             "message" in err &&
             String((err as Error).message).includes("Cannot mix BigInt and other types")
           ) {
-            // Suppress harmless BigInt mixing error
           } else {
             console.error("Error loading assets from backend:", err);
             toast({
@@ -189,7 +187,7 @@ const AssetsList = ({ onTotalChange, onAssetsChange, onAssetAdded }: AssetsListP
         "message" in err &&
         String((err as Error).message).includes("Cannot mix BigInt")
       ) {
-        // Suppress harmless BigInt mixing error
+        
       } else {
         toast({
           title: "Error adding asset",

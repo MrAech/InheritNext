@@ -1,5 +1,3 @@
-// API service layer for IC canister backend integration
-
 import { Actor, HttpAgent } from "@dfinity/agent";
 import { IDL } from "@dfinity/candid";
 import type {
@@ -11,19 +9,18 @@ import type {
   Timer,
 } from "@/types/backend";
 
-// Canister config (replace with actual values or env vars)
 import { idlFactory as civ_backend_idlFactory, canisterId as civ_backend_canisterId } from "../../../declarations/civ_backend";
 
 const CANISTER_ID = civ_backend_canisterId;
 
-// Candid interface (IDL) - must match civ_backend.did
+
 const idlFactory = civ_backend_idlFactory;
 
-// Agent setup
 const backendCanisterId = import.meta.env.VITE_CANISTER_ID_CIV_BACKEND || CANISTER_ID;
 const agentHost = backendCanisterId
   ? `http://${backendCanisterId}.localhost:4943`
   : "http://localhost:4943";
+  // TODO: FIXME: use something other than this depricated httpAgent @gaurisingh73
 const agent = new HttpAgent({ host: agentHost });
 if (agentHost.includes("localhost")) {
   // Required for local development to validate certificates
@@ -32,7 +29,7 @@ if (agentHost.includes("localhost")) {
 }
 const actor = Actor.createActor(idlFactory, { agent, canisterId: CANISTER_ID });
 
-// Helper for retries
+
 async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
   let lastError;
   for (let i = 0; i <= retries; i++) {
@@ -47,7 +44,6 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
   throw lastError;
 }
 
-// API functions
 
 export async function listAssets(): Promise<Asset[]> {
   return withRetry(() => actor.list_assets()).then((result: any) => Array.isArray(result) ? result : []);
@@ -122,5 +118,3 @@ export async function resetTimer(): Promise<boolean> {
     return false;
   });
 }
-
-// Error handling: All errors are thrown, caller should catch and handle in UI

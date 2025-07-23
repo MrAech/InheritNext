@@ -59,7 +59,7 @@ const HeirsList = ({ onHeirsChange }: HeirsListProps = {}) => {
       }
     }
     fetchHeirs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps 
   }, []);
 
   const handleUpdateHeir = async (updatedHeir: Heir) => {
@@ -223,7 +223,7 @@ const HeirsList = ({ onHeirsChange }: HeirsListProps = {}) => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {/* Additional fields can be shown here if backend is extended */}
+                  {/* Additional fields for future */}
                 </div>
               </CardContent>
               <div className="flex space-x-2 px-4 pb-4">

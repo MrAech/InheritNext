@@ -1,4 +1,3 @@
-
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from "recharts";
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
 
@@ -39,7 +38,6 @@ const AssetDistributionChart = ({ asset, heirs, distributions }: AssetDistributi
   const totalDistributed = assetDistributions.reduce((sum, d) => sum + d.percentage, 0);
   const remaining = 100 - totalDistributed;
 
-  // Prepare chart data
   const chartData = [
     ...assetDistributions.map((distribution, index) => {
       const heir = heirs.find(h => h.id === distribution.heirId);

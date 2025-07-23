@@ -1,5 +1,3 @@
-// Types matching civ_backend DID
-
 export interface Asset {
   id: number;
   name: string;
