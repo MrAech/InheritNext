@@ -34,12 +34,17 @@ interface HeirsListProps {
   onHeirsChange?: (heirs: Heir[]) => void;
 }
 
+import { useDemoMode } from "@/context/DemoModeContext";
+
+import { useNavigate } from "react-router-dom";
 const HeirsList = ({ onHeirsChange }: HeirsListProps = {}) => {
   const [heirs, setHeirs] = useState<Heir[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingHeir, setEditingHeir] = useState<Heir | null>(null);
   const [isAddingHeir, setIsAddingHeir] = useState(false);
   const { toast } = useToast();
+  const { mode } = useDemoMode();
+  const navigate = useNavigate();
 
   useEffect(() => {
     async function fetchHeirs() {
@@ -177,18 +182,30 @@ const HeirsList = ({ onHeirsChange }: HeirsListProps = {}) => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <p className="text-muted-foreground">Manage beneficiaries and their inheritance relationships</p>
-        <Dialog open={isAddingHeir} onOpenChange={setIsAddingHeir}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="bg-gradient-success">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Heir
-            </Button>
-          </DialogTrigger>
-          <HeirFormDialog
-            onSubmit={handleAddHeir}
-            onCancel={() => setIsAddingHeir(false)}
-          />
-        </Dialog>
+        {mode === "evaluator" ? (
+          <Button
+            size="sm"
+            className="bg-gradient-primary"
+            onClick={() => navigate("/add-heir?simulated=true")}
+            title="Simulate Add Heir"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Heir (Simulated)
+          </Button>
+        ) : (
+          <Dialog open={isAddingHeir} onOpenChange={setIsAddingHeir}>
+            <DialogTrigger asChild>
+              <Button size="sm" className="bg-gradient-success">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Heir
+              </Button>
+            </DialogTrigger>
+            <HeirFormDialog
+              onSubmit={handleAddHeir}
+              onCancel={() => setIsAddingHeir(false)}
+            />
+          </Dialog>
+        )}
       </div>
 
       {loading ? (
@@ -281,6 +298,7 @@ const HeirFormDialog = ({ heir, onSubmit, onCancel, isEditing = false }: HeirFor
     phone: heir?.phone || "",
     address: heir?.address || "",
   });
+  // All fields enabled for both modes
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

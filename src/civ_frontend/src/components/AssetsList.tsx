@@ -40,6 +40,9 @@ interface AssetsListProps {
   onAssetAdded?: () => void;
 }
 
+import { useDemoMode } from "@/context/DemoModeContext";
+import { useNavigate } from "react-router-dom";
+
 const AssetsList = ({ onTotalChange, onAssetsChange, onAssetAdded }: AssetsListProps) => {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,6 +50,8 @@ const AssetsList = ({ onTotalChange, onAssetsChange, onAssetAdded }: AssetsListP
   const [isAddingAsset, setIsAddingAsset] = useState(false);
   const { toast } = useToast();
   const { formatCurrency } = useSettings();
+  const { mode } = useDemoMode();
+  const navigate = useNavigate();
 
   useEffect(() => {
     async function fetchAssets() {
@@ -228,18 +233,30 @@ const AssetsList = ({ onTotalChange, onAssetsChange, onAssetAdded }: AssetsListP
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <p className="text-muted-foreground">Manage your personal assets for inheritance</p>
-        <Dialog open={isAddingAsset} onOpenChange={setIsAddingAsset}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="bg-gradient-success">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Asset
-            </Button>
-          </DialogTrigger>
-          <AssetFormDialog
-            onSubmit={handleAddAsset}
-            onCancel={() => setIsAddingAsset(false)}
-          />
-        </Dialog>
+        {mode === "evaluator" ? (
+          <Button
+            size="sm"
+            className="bg-gradient-primary"
+            onClick={() => navigate("/add-asset?simulated=true")}
+            title="Simulate Add Asset"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Asset (Simulated)
+          </Button>
+        ) : (
+          <Dialog open={isAddingAsset} onOpenChange={setIsAddingAsset}>
+            <DialogTrigger asChild>
+              <Button size="sm" className="bg-gradient-success">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Asset
+              </Button>
+            </DialogTrigger>
+            <AssetFormDialog
+              onSubmit={handleAddAsset}
+              onCancel={() => setIsAddingAsset(false)}
+            />
+          </Dialog>
+        )}
       </div>
 
       {loading ? (
@@ -325,6 +342,7 @@ const AssetFormDialog = ({ asset, onSubmit, onCancel, isEditing = false }: Asset
     value: Number(asset?.value) || 0,
     description: asset?.description || "",
   });
+  // Use mode from parent component scope
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

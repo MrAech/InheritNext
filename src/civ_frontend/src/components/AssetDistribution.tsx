@@ -42,13 +42,34 @@ interface AssetDistributionProps {
   heirs: Heir[];
 }
 
-const AssetDistribution = ({ assets, heirs }: AssetDistributionProps) => {
+import { useDemoMode } from "@/context/DemoModeContext";
+import { useSimulatedData } from "@/context/SimulatedDataContext";
+
+import { useEffect } from "react";
+import { listAssets, listHeirs } from "../lib/api";
+
+const AssetDistribution = () => {
+  const { mode } = useDemoMode();
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [heirs, setHeirs] = useState<Heir[]>([]);
   const [distributions, setDistributions] = useState<AssetDistribution[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [pendingDistribution, setPendingDistribution] = useState<AssetDistribution | null>(null);
   const [selectedAsset, setSelectedAsset] = useState("");
   const [selectedHeir, setSelectedHeir] = useState("");
   const [percentageInput, setPercentageInput] = useState("");
   const { toast } = useToast();
+
+  useEffect(() => {
+    async function fetchData() {
+      const assetsData = await listAssets();
+      const heirsData = await listHeirs();
+      setAssets(assetsData.map(a => ({ ...a, id: a.id.toString() })));
+      setHeirs(heirsData.map(h => ({ ...h, id: h.id.toString() })));
+    }
+    fetchData();
+  }, []);
 
   const handleAddDistribution = () => {
     const percentage = Number(percentageInput);
@@ -93,6 +114,22 @@ const AssetDistribution = ({ assets, heirs }: AssetDistributionProps) => {
     });
   };
 
+  const handleConfirmSimulated = () => {
+    if (pendingDistribution) {
+      setDistributions([...distributions, pendingDistribution]);
+      setSelectedAsset("");
+      setSelectedHeir("");
+      setPercentageInput("");
+      setIsDialogOpen(false);
+      setShowConfirm(false);
+      setPendingDistribution(null);
+      toast({
+        title: "Simulated Distribution Added",
+        description: "Distribution has been added in evaluator mode.",
+      });
+    }
+  };
+
   const handlePercentageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
 
@@ -135,10 +172,17 @@ const AssetDistribution = ({ assets, heirs }: AssetDistributionProps) => {
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" className="bg-gradient-success">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Distribution
-            </Button>
+            {mode === "evaluator" ? (
+              <Button size="sm" className="bg-gradient-success">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Distribution (Simulated)
+              </Button>
+            ) : (
+              <Button size="sm" className="bg-gradient-success">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Distribution
+              </Button>
+            )}
           </DialogTrigger>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
@@ -201,7 +245,7 @@ const AssetDistribution = ({ assets, heirs }: AssetDistributionProps) => {
                 Cancel
               </Button>
               <Button onClick={handleAddDistribution} className="bg-gradient-primary">
-                Add Distribution
+                {mode === "evaluator" ? "Add Distribution (Simulated)" : "Add Distribution"}
               </Button>
             </DialogFooter>
           </DialogContent>

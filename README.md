@@ -71,4 +71,15 @@ flowchart TD
 
 ## License
 
+## Evaluator Guide
+
+This app is designed for evaluators to test all core features using live backend data. There is no simulated or demo mode; every action updates the backend and reflects in the dashboard.
+
+- **Add Assets & Heirs:** Use the forms to add new assets and heirs. All entries are stored in the backend.
+- **Distribute Assets:** Assign assets to heirs and view distributions. Changes are immediately saved and visualized.
+- **Dashboard:** Displays real-time data for assets, heirs, and distributions.
+- **No Simulation:** All features are interactive and update the backend directly.
+- **Feedback & Walkthrough:** Use the guided walkthrough and feedback prompts for help or suggestions.
+
+For evaluation, simply use the app as an end user. All actions are tracked and visible in the dashboard.
 MIT

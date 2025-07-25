@@ -6,16 +6,27 @@ import { Shield, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 
+import { useDemoMode } from "@/context/DemoModeContext";
+import { useOverlayManager } from "@/context/OverlayManagerContext";
+
 const SignIn = () => {
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { mode } = useDemoMode();
+  const { setOverlay } = useOverlayManager();
 
   useEffect(() => {
     if (isAuthenticated) {
       navigate("/dashboard", { replace: true });
     }
   }, [isAuthenticated, navigate]);
+
+  useEffect(() => {
+    if (mode === "evaluator") {
+      setOverlay("onboarding");
+    }
+  }, [mode, setOverlay]);
 
   const handleLogin = async () => {
     await login();
@@ -37,6 +48,7 @@ const SignIn = () => {
           </h1>
           <p className="dark:text-white/80 light:text-black/80">
             Secure Inheritance management platform
+            Dont forget about Evaluator Mode top right 
           </p>
         </div>
 

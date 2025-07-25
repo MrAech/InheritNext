@@ -24,6 +24,8 @@ import { useSettings } from "@/context/SettingsContext";
 
 import { timerStatus, resetTimer, assignDistributions } from "@/lib/api";
 
+import { useDemoMode } from "@/context/DemoModeContext";
+
 const Dashboard = () => {
   const { logout } = useAuth();
   const [totalAssets, setTotalAssets] = useState(2850000);
@@ -38,6 +40,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { formatCurrency } = useSettings();
+  const { mode } = useDemoMode();
 
 
   useEffect(() => {
@@ -294,7 +297,11 @@ const Dashboard = () => {
               <DollarSign className="w-5 h-5 text-primary" />
               Personal Assets
             </h2>
-            <Badge variant="secondary">Updated 2 hours ago</Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary">Updated X hours ago</Badge>
+              {/* Use context and hooks for mode and navigate */}
+              {/* Add Asset button moved to AssetsList for mode logic */}
+            </div>
           </div>
           <AssetsList
             onTotalChange={setTotalAssets}
@@ -331,18 +338,20 @@ const Dashboard = () => {
           />
         </div>
 
-        {/* Heirs Section */}
+        Heirs Section
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold flex items-center gap-2">
               <Users className="w-5 h-5 text-primary" />
               Heirs & Asset Distribution
             </h2>
-            <Badge variant="secondary">{heirs.length} Active Heirs</Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary">{heirs.length} Active Heirs</Badge>
+              {/* Add Heir button moved to HeirsList for mode logic */}
+            </div>
           </div>
           <HeirsList onHeirsChange={setHeirs} />
         </div>
-
         {/* Asset Distribution  */}
         {assets.length > 0 && heirs.length > 0 && (
           <div className="mb-8">
@@ -361,3 +370,4 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
+
