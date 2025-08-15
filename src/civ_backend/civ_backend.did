@@ -1,26 +1,23 @@
 type Asset = record {
-  id: nat64;
-  updated_at: nat64;
-  asset_type: text;
-  value: nat64;
-  name: text;
-  description: text;
-  created_at: nat64;
+  id : nat64;
+  updated_at : nat64;
+  asset_type : text;
+  value : nat64;
+  name : text;
+  description : text;
+  created_at : nat64;
 };
-
-type AssetInput = record {
-  asset_type: text;
-  value: nat64;
-  name: text;
-  description: text;
-};
-
 type AssetDistribution = record {
-  heir_id: nat64;
-  asset_id: nat64;
-  percentage: nat8;
+  heir_id : nat64;
+  asset_id : nat64;
+  percentage : nat8;
 };
-
+type AssetInput = record {
+  asset_type : text;
+  value : nat64;
+  name : text;
+  description : text;
+};
 type CivError = variant {
   AssetNotFound;
   InvalidHeirPercentage;
@@ -29,57 +26,51 @@ type CivError = variant {
   DistributionAssetNotFound;
   DistributionHeirNotFound;
   HeirNotFound;
-  Other: text;
+  Other : text;
   UserNotFound;
 };
-
 type Heir = record {
-  id: nat64;
-  updated_at: nat64;
-  relationship: text;
-  name: text;
-  created_at: nat64;
-  email: text;
-  address: text;
-  phone: text;
+  id : nat64;
+  updated_at : nat64;
+  relationship : text;
+  name : text;
+  created_at : nat64;
+  email : text;
+  address : text;
+  phone : text;
 };
-
 type HeirInput = record {
-  relationship: text;
-  name: text;
-  email: text;
-  address: text;
-  phone: text;
+  relationship : text;
+  name : text;
+  email : text;
+  address : text;
+  phone : text;
 };
-
-type Result = variant {
-  Ok;
-  Err: CivError;
-};
-
+type Result = variant { Ok; Err : CivError };
 type User = record {
-  timer: nat64;
-  heirs: vec Heir;
-  assets: vec Asset;
-  user: text;
-  distributions: vec AssetDistribution;
+  distributed : bool;
+  heirs : vec Heir;
+  assets : vec Asset;
+  user : text;
+  distributions : vec AssetDistribution;
+  timer_expiry : nat64;
 };
-
 service : {
-  __get_candid_interface_tmp_hack: () -> (text) query;
-  add_asset: (AssetInput) -> (Result);
-  add_heir: (HeirInput) -> (Result);
-  assign_distributions: (vec AssetDistribution) -> (Result);
-  get_distribution: () -> (vec record { text; nat64 }) query;
-  get_timer: () -> (int) query;
-  get_user: () -> (opt User) query;
-  list_assets: () -> (vec Asset) query;
-  list_heirs: () -> (vec Heir) query;
-  remove_asset: (nat64) -> (Result);
-  remove_heir: (nat64) -> (Result);
-  reset_timer: () -> (Result);
-  update_asset: (nat64, AssetInput) -> (Result);
-  update_heir: (nat64, HeirInput) -> (Result);
-};
-
-
+  __get_candid_interface_tmp_hack : () -> (text) query;
+  add_asset : (AssetInput) -> (Result);
+  add_heir : (HeirInput) -> (Result);
+  assign_distributions : (vec AssetDistribution) -> (Result);
+  get_asset_distributions : (nat64) -> (vec AssetDistribution) query;
+  get_distribution : () -> (vec record { text; nat64 }) query;
+  get_timer : () -> (int64) query;
+  get_user : () -> (opt User) query;
+  list_assets : () -> (vec Asset) query;
+  list_distributions : () -> (vec AssetDistribution) query;
+  list_heirs : () -> (vec Heir) query;
+  remove_asset : (nat64) -> (Result);
+  remove_heir : (nat64) -> (Result);
+  reset_timer : () -> (Result);
+  set_asset_distributions : (nat64, vec AssetDistribution) -> (Result);
+  update_asset : (nat64, AssetInput) -> (Result);
+  update_heir : (nat64, HeirInput) -> (Result);
+}
