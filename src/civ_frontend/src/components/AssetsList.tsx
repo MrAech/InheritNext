@@ -164,6 +164,7 @@ const AssetsList = ({ onTotalChange, onAssetsChange, onAssetAdded }: AssetsListP
             "message" in err &&
             String((err as Error).message).includes("Cannot mix BigInt and other types")
           ) {
+            // nothing to see here
           } else {
             console.error("Error loading assets from backend:", err);
             toast({
@@ -187,7 +188,7 @@ const AssetsList = ({ onTotalChange, onAssetsChange, onAssetAdded }: AssetsListP
         "message" in err &&
         String((err as Error).message).includes("Cannot mix BigInt")
       ) {
-        
+        // nothing to see here :) 
       } else {
         toast({
           title: "Error adding asset",
