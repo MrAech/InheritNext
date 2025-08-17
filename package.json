@@ -14,5 +14,11 @@
   "type": "module",
   "workspaces": [
     "src/civ_frontend"
-  ]
+  ],
+  "devDependencies": {
+    "@types/node": "^24.2.1"
+  },
+  "dependencies": {
+    "i": "^0.3.7"
+  }
 }

@@ -13,7 +13,7 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
-    "types": ["tailwindcss"]
+    "types": ["tailwindcss", "node"]
   },
   "include": ["vite.config.ts"]
 }
