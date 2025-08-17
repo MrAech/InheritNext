@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { AssetsList } from "@/components/AssetsList";
 import { HeirsList } from "@/components/HeirsList";
 import { TimerResetDialog } from "@/components/TimerResetDialog";
-import { AssetDistribution } from "@/components/AssetDistribution";
+import DistributionsManager from "@/components/DistributionsManager";
 import {
   DollarSign,
   TrendingUp,
@@ -18,27 +18,52 @@ import {
   Wallet
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/context/useAuth";
+import type { Asset, Heir, AssetDistribution as BackendDistribution } from "@/types/backend";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { useSettings } from "@/context/SettingsContext";
 
-import { timerStatus, resetTimer, assignDistributions } from "@/lib/api";
+import { timerStatus, resetTimer } from "@/lib/api";
+import IntegritySummary from "@/components/IntegritySummary";
+import { Link } from "react-router-dom";
 
 const Dashboard = () => {
-  const { logout } = useAuth();
+  const { logout, identity } = useAuth();
   const [totalAssets, setTotalAssets] = useState(2850000);
   const [timerResetOpen, setTimerResetOpen] = useState(false);
   const [lastReset, setLastReset] = useState<Date | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<string>("");
   const [timerLoading, setTimerLoading] = useState(false);
   const [timerError, setTimerError] = useState<string | null>(null);
-  const [assets, setAssets] = useState<any[]>([]);
-  const [heirs, setHeirs] = useState<any[]>([]);
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [heirs, setHeirs] = useState<Heir[]>([]);
   const [distributionWarning, setDistributionWarning] = useState<string | null>(null);
+  const [initialLoading, setInitialLoading] = useState(true);
   const navigate = useNavigate();
   const { toast } = useToast();
   const { formatCurrency } = useSettings();
 
+
+  // Initial data fetch for assets & heirs when component mounts or identity changes
+  useEffect(() => {
+    let cancelled = false;
+    setInitialLoading(true);
+    (async () => {
+      try {
+        const api = await import("@/lib/api");
+        const [a, h] = await Promise.all([api.listAssets(), api.listHeirs()]);
+        if (!cancelled) {
+          setAssets(a);
+          setHeirs(h);
+        }
+      } catch (e) {
+        if (!cancelled) console.warn("[Dashboard] initial fetch failed", e);
+      } finally {
+        if (!cancelled) setInitialLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [identity]);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -54,29 +79,12 @@ const Dashboard = () => {
           setTimeRemaining(timer ? `${timer} seconds` : "Expired");
           if (timer === 0) {
             setDistributionWarning("Timer expired! Assets will be auto-distributed.");
-            try {
-              for (const asset of assets) {
-                const distributions = asset.distributions || [];
-                if (distributions.length > 0) {
-                  await assignDistributions(distributions);
-                }
-              }
-              toast({
-                title: "Auto Distribution",
-                description: "Assets have been auto-distributed due to timer expiry.",
-              });
-            } catch (err) {
-              toast({
-                title: "Distribution Error",
-                description: "Failed to auto-distribute assets.",
-                variant: "destructive",
-              });
-            }
+            // Note: Backend currently does not auto-assign; consider triggering a saved assignment if available.
           } else {
             setDistributionWarning(null);
           }
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         setTimerError("Failed to fetch timer status.");
       } finally {
         setTimerLoading(false);
@@ -84,10 +92,10 @@ const Dashboard = () => {
     };
 
     fetchTimer();
-    interval = setInterval(fetchTimer, 60000);
+    const id = setInterval(fetchTimer, 60000);
 
-    return () => clearInterval(interval);
-  }, [assets]);
+    return () => clearInterval(id);
+  }, [assets, toast]);
 
   const handleSignOut = async () => {
     await logout();
@@ -131,7 +139,7 @@ const Dashboard = () => {
           variant: "destructive",
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setTimerError("Failed to reset timer.");
       toast({
         title: "Timer Error",
@@ -179,6 +187,12 @@ const Dashboard = () => {
             </div>
             <div className="flex items-center space-x-4">
               <SettingsDialog />
+              <Link to="/distributions">
+                <Button variant="outline" size="sm" className="hidden sm:flex">
+                  <PieChart className="w-4 h-4 mr-2" />
+                  Distributions
+                </Button>
+              </Link>
               <Button
                 variant="outline"
                 size="sm"
@@ -244,7 +258,7 @@ const Dashboard = () => {
         </div>
 
         {/* Total Assets Overview */}
-        <div className="grid gap-6 md:grid-cols-3 mb-8">
+        <div className="grid gap-6 md:grid-cols-4 mb-8">
           <Card className="shadow-card">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Assets</CardTitle>
@@ -285,6 +299,8 @@ const Dashboard = () => {
               </p>
             </CardContent>
           </Card>
+
+          <IntegritySummary />
         </div>
 
         {/* Assets Section */}
@@ -296,39 +312,43 @@ const Dashboard = () => {
             </h2>
             <Badge variant="secondary">Updated 2 hours ago</Badge>
           </div>
-          <AssetsList
-            onTotalChange={setTotalAssets}
-            onAssetsChange={setAssets}
-            onAssetAdded={async () => {
-              console.log("onAssetAdded callback triggered");
-              setTimerLoading(true);
-              try {
-                // Fetch latest assets before checking timer
-                const assetsData = await import("@/lib/api").then(m => m.listAssets());
-                setAssets(await assetsData);
-                let timer = await timerStatus();
-                if (typeof timer === "bigint") {
-                  timer = Number(timer);
-                }
-                console.log("Timer value after asset added:", timer);
-                if ((assetsData.length === 0) || timer === -1) {
-                  setTimeRemaining("");
-                  setDistributionWarning(null);
-                } else {
-                  setTimeRemaining(timer ? `${timer} seconds` : "Expired");
-                  if (timer === 0) {
-                    setDistributionWarning("Timer expired! Assets will be auto-distributed.");
-                  } else {
-                    setDistributionWarning(null);
+          {initialLoading ? (
+            <div className="text-center text-muted-foreground py-8">Loading assets...</div>
+          ) : (
+            <AssetsList
+              onTotalChange={setTotalAssets}
+              onAssetsChange={setAssets}
+              onAssetAdded={async () => {
+                console.log("onAssetAdded callback triggered");
+                setTimerLoading(true);
+                try {
+                  // Fetch latest assets before checking timer
+                  const assetsData = await import("@/lib/api").then(m => m.listAssets());
+                  setAssets(await assetsData);
+                  let timer = await timerStatus();
+                  if (typeof timer === "bigint") {
+                    timer = Number(timer);
                   }
+                  console.log("Timer value after asset added:", timer);
+                  if ((assetsData.length === 0) || timer === -1) {
+                    setTimeRemaining("");
+                    setDistributionWarning(null);
+                  } else {
+                    setTimeRemaining(timer ? `${timer} seconds` : "Expired");
+                    if (timer === 0) {
+                      setDistributionWarning("Timer expired! Assets will be auto-distributed.");
+                    } else {
+                      setDistributionWarning(null);
+                    }
+                  }
+                } catch {
+                  setTimerError("Failed to fetch timer status.");
+                } finally {
+                  setTimerLoading(false);
                 }
-              } catch {
-                setTimerError("Failed to fetch timer status.");
-              } finally {
-                setTimerLoading(false);
-              }
-            }}
-          />
+              }}
+            />
+          )}
         </div>
 
         {/* Heirs Section */}
@@ -340,13 +360,17 @@ const Dashboard = () => {
             </h2>
             <Badge variant="secondary">{heirs.length} Active Heirs</Badge>
           </div>
-          <HeirsList onHeirsChange={setHeirs} />
+          {initialLoading ? (
+            <div className="text-center text-muted-foreground py-8">Loading heirs...</div>
+          ) : (
+            <HeirsList onHeirsChange={setHeirs} />
+          )}
         </div>
 
-        {/* Asset Distribution  */}
+        {/* Distributions Manager */}
         {assets.length > 0 && heirs.length > 0 && (
           <div className="mb-8">
-            <AssetDistribution assets={assets} heirs={heirs} />
+            <DistributionsManager assets={assets} heirs={heirs} />
           </div>
         )}
       </main>

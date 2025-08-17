@@ -1,11 +1,10 @@
 {
-    "version": 1,
-    "canisters": {
-      "civ_backend": {
-        "type": "rust",
-        "main": "src/lib.rs",
-        "candid": "civ_backend.did"
-      }
+  "version": 1,
+  "canisters": {
+    "civ_backend": {
+      "type": "rust",
+      "main": "src/lib.rs",
+      "candid": "civ_backend.did"
     }
   }
-  
+}

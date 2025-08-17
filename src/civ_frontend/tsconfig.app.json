@@ -21,7 +21,7 @@
       "@/*": ["./src/*"],
       "declarations/*": ["../../declarations/*"]
     },
-    "types": ["tailwindcss"]
+    "types": ["tailwindcss", "node"]
   },
   "include": ["src"]
 }

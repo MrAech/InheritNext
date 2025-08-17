@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Shield, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/context/useAuth";
 
 const SignIn = () => {
   const { login, isAuthenticated } = useAuth();
@@ -51,7 +51,7 @@ const SignIn = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button 
+            <Button
               onClick={handleLogin}
               className="w-full bg-gradient-primary hover:scale-105 transition-transform"
             >
