@@ -2,20 +2,20 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from "recharts";
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
 
 interface Asset {
-  id: string;
+  id: number;
   name: string;
   value: number;
 }
 
 interface Heir {
-  id: string;
+  id: number;
   name: string;
 }
 
 interface AssetDistribution {
   id: string;
-  assetId: string;
-  heirId: string;
+  assetId: number;
+  heirId: number;
   percentage: number;
 }
 
