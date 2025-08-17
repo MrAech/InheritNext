@@ -7,6 +7,8 @@ import { SettingsProvider } from "@/context/SettingsContext";
 import SignIn from "@/pages/SignIn";
 import Dashboard from "@/pages/Dashboard";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import DistributionsPage from "@/pages/Distributions";
+import AuthExpiryBanner from "@/components/AuthExpiryBanner";
 import '@/App.css';
 
 const queryClient = new QueryClient();
@@ -20,6 +22,7 @@ const App = () => (
         <TooltipProvider>
           <Toaster />
           <Sonner />
+          <AuthExpiryBanner />
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<SignIn />} />
@@ -28,6 +31,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/distributions"
+                element={
+                  <ProtectedRoute>
+                    <DistributionsPage />
                   </ProtectedRoute>
                 }
               />
