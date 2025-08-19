@@ -55,6 +55,15 @@ type User = record {
   distributions : vec AssetDistribution;
   timer_expiry : nat64;
 };
+type IntegrityReport = record {
+  asset_count : nat64;
+  distribution_count : nat64;
+  over_allocated_assets : vec nat64;
+  fully_allocated_assets : vec nat64;
+  partially_allocated_assets : vec nat64;
+  unallocated_assets : vec nat64;
+  issues : vec text;
+};
 service : {
   __get_candid_interface_tmp_hack : () -> (text) query;
   add_asset : (AssetInput) -> (Result);
@@ -73,4 +82,5 @@ service : {
   set_asset_distributions : (nat64, vec AssetDistribution) -> (Result);
   update_asset : (nat64, AssetInput) -> (Result);
   update_heir : (nat64, HeirInput) -> (Result);
+  check_integrity : () -> (IntegrityReport) query;
 }
