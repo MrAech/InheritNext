@@ -69,10 +69,11 @@ pub struct User {
     pub distributions: Vec<AssetDistribution>,
     pub timer_expiry: u64,
     pub distributed: bool,
+    pub last_timer_reset: u64, // seconds since epoch, 0 if never reset
 }
 
 // Quick snapshot to let the UI (or a dev) see if allocations look healthy.
-// Not over‑engineering: just enough fields to answer "did I assign things sensibly?". cause its breaking too much 
+// for --> did I assign things sensibly?. cause its breaking too much 
 #[derive(Clone, CandidType, Deserialize)]
 pub struct IntegrityReport {
     // Total number of assets examined.
