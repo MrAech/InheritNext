@@ -5,7 +5,7 @@ use ic_cdk::api::msg_caller;
 // All time values here are in seconds (not nanoseconds)— makes the math easier to follow
 // If we ever need more precision, we can always add another field
 // For now, everything lives in a single in-memory HashMap keyed by the caller's principal as text
-// Will Add Stable Storage later
+// Will Add Stable Storage later (TODO: persist USERS map to stable memory for timer and user data)
 
 
 // Returns the current time as whole seconds since the UNIX epoch, based on IC system time.
@@ -40,6 +40,7 @@ pub fn add_asset(new_asset: AssetInput) -> Result<(), CivError> {
             distributions: Vec::new(),
             timer_expiry: 0,
             distributed: false,
+            last_timer_reset: 0,
         });
         // Auto-generate unique asset ID
         let next_id = user.assets.iter().map(|a| a.id).max().unwrap_or(0) + 1;
@@ -52,12 +53,7 @@ pub fn add_asset(new_asset: AssetInput) -> Result<(), CivError> {
             created_at: now,
             updated_at: now,
         });
-        // If asset count is 1 or greater and timer not set, start the timer
-        // TODO: need to change to look for first distribution instead
-        if user.assets.len() >= 1 && user.timer_expiry == 0 {
-            user.timer_expiry = now + 30 * 24 * 60 * 60;
-            user.distributed = false;
-        }
+        // Timer is now started on first distribution, not asset add.
         Ok(())
     })
 }
@@ -75,6 +71,7 @@ pub fn add_heir(new_heir: HeirInput) -> Result<(), CivError> {
             distributions: Vec::new(),
             timer_expiry: now + 30 * 24 * 60 * 60,
             distributed: false,
+            last_timer_reset: 0,
         });
         // Auto-generate unique heir ID
         let next_id = user.heirs.iter().map(|h| h.id).max().unwrap_or(0) + 1;
@@ -109,6 +106,7 @@ pub fn assign_distributions(distributions: Vec<AssetDistribution>) -> Result<(),
             distributions: Vec::new(),
             timer_expiry: now + 30 * 24 * 60 * 60,
             distributed: false,
+            last_timer_reset: 0,
         });
 
 
@@ -227,7 +225,16 @@ pub fn set_asset_distributions(asset_id: u64, distributions: Vec<AssetDistributi
             }
             // Replace existing for this asset
             user.distributions.retain(|d| d.asset_id != asset_id);
+            let prev_dist_count = user.distributions.len();
             user.distributions.extend(distributions);
+
+            // Start timer if this is the first distribution and timer not set
+            let now = now_secs();
+            if user.distributions.len() > 0 && user.timer_expiry == 0 {
+                user.timer_expiry = now + 30 * 24 * 60 * 60;
+                user.distributed = false;
+            }
+
             Ok(())
         } else {
             Err(CivError::UserNotFound)
@@ -264,25 +271,21 @@ pub fn get_timer() -> i64 {
         let mut users = users.borrow_mut();
         if let Some(user) = users.get_mut(&user) {
             let now = now_secs();
-            ic_cdk::println!("get_timer: asset_count={}, timer_expiry={}", user.assets.len(), user.timer_expiry);
-            // If no assets, timer not started
-            if user.assets.is_empty() {
-                ic_cdk::println!("get_timer: no assets, returning -1");
+            ic_cdk::println!("get_timer: asset_count={}, distribution_count={}, timer_expiry={}", user.assets.len(), user.distributions.len(), user.timer_expiry);
+            // If no distributions, timer not started
+            if user.distributions.is_empty() {
+                ic_cdk::println!("get_timer: no distributions, returning -1");
                 return -1; // "not started"
             }
-            // If asset count is 1 or greater and timer not set, start the timer
-            // TODO change to distribution
-            if user.assets.len() >= 1 && user.timer_expiry == 0 {
-                user.timer_expiry = now + 30 * 24 * 60 * 60;
-                user.distributed = false;
-                ic_cdk::println!("get_timer: timer started, expiry={}", user.timer_expiry);
-            }
+            // Timer is now started on first distribution, not asset add.
             if user.timer_expiry < now && !user.distributed && !user.assets.is_empty() {
-                // Timer expired, auto-distribute: clear assets/distributions and set distributed flag
+                // Timer expired: placeholder for auto-assignment logic.
+                // For now, just clear assets/distributions and set distributed flag.
+                // TODO: In future, implement actual assignment to heirs here.
                 user.assets.clear();
                 user.distributions.clear();
                 user.distributed = true;
-                ic_cdk::println!("get_timer: timer expired, assets cleared");
+                ic_cdk::println!("get_timer: timer expired, assets cleared (auto-assignment placeholder)");
             }
             let remaining = user.timer_expiry.saturating_sub(now) as i64;
             ic_cdk::println!("get_timer: returning remaining={}", remaining);
@@ -301,6 +304,7 @@ pub fn get_user() -> Option<User> {
         users.get(&user).cloned()
     })
 }
+// last_timer_reset is now included in User struct and returned here
 
 pub fn list_assets() -> Vec<Asset> {
     let user = user_id();
@@ -363,6 +367,7 @@ pub fn reset_timer() -> Result<(), CivError> {
         if let Some(user) = users.get_mut(&user) {
             user.timer_expiry = now + 30 * 24 * 60 * 60;
             user.distributed = false;
+            user.last_timer_reset = now;
             Ok(())
         } else {
             Err(CivError::UserNotFound)
