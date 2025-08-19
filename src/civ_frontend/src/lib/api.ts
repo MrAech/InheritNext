@@ -53,9 +53,19 @@ export interface IntegrityReport {
   issues: Array<string>;
 }
 
+interface ServiceUser {
+  user: string;
+  assets: ServiceAsset[];
+  heirs: ServiceHeir[];
+  distributions: ServiceDistribution[];
+  timer_expiry: bigint;
+  distributed: boolean;
+  last_timer_reset: bigint;
+}
+
 interface Service {
   // optional get_user for connectivity check
-  get_user?: () => Promise<unknown>;
+  get_user?: () => Promise<ServiceUser | null>;
   add_asset: (asset: { name: string; asset_type: string; value: bigint; description: string }) => Promise<ServiceResult>;
   update_asset: (id: bigint, asset: { name: string; asset_type: string; value: bigint; description: string }) => Promise<ServiceResult>;
   remove_asset: (id: bigint) => Promise<ServiceResult>;
@@ -268,6 +278,43 @@ export async function resetTimer(): Promise<boolean> {
 }
 
 // Fetch integrity report and map bigint arrays to numbers for convenience
+// Provide defensive conversion to avoid runtime errors if unexpected types slip through.
+function safeBigIntToNumber(val: unknown, label: string): number {
+  if (typeof val === 'number') return val;
+  if (typeof val === 'bigint') {
+    // Clamp if exceeds JS safe integer
+    const max = BigInt(Number.MAX_SAFE_INTEGER);
+    if (val > max) {
+      console.warn(`[Integrity] ${label} value ${val.toString()} exceeds MAX_SAFE_INTEGER; clamping.`);
+      return Number.MAX_SAFE_INTEGER;
+    }
+    return Number(val);
+  }
+  // Attempt parse if string
+  if (typeof val === 'string') {
+    try {
+      const asBig = BigInt(val);
+      return safeBigIntToNumber(asBig, label);
+    } catch {
+      console.warn(`[Integrity] Could not parse string for ${label}:`, val);
+      return 0;
+    }
+  }
+  console.warn(`[Integrity] Unexpected type for ${label}:`, typeof val, val);
+  return 0;
+}
+
+type IntegrityNumericContainer = bigint[] | BigUint64Array | BigInt64Array;
+interface RawIntegrityLike {
+  asset_count: bigint | number | string;
+  distribution_count: bigint | number | string;
+  over_allocated_assets: IntegrityNumericContainer | unknown;
+  fully_allocated_assets: IntegrityNumericContainer | unknown;
+  partially_allocated_assets: IntegrityNumericContainer | unknown;
+  unallocated_assets: IntegrityNumericContainer | unknown;
+  issues: string[] | unknown;
+}
+
 export async function checkIntegrity(): Promise<{
   assetCount: number;
   distributionCount: number;
@@ -277,19 +324,72 @@ export async function checkIntegrity(): Promise<{
   unallocated: number[];
   issues: string[];
 }> {
-  const raw = await withRetry(() => actor.check_integrity());
-  const mapIds = (arr: Array<bigint>) => arr.map(n => Number(n));
+  let raw: IntegrityReport;
+  try {
+    raw = await withRetry(() => actor.check_integrity());
+  } catch (e) {
+    console.error('[Integrity] fetch failed', e);
+    throw e;
+  }
+
+  const rawLike: RawIntegrityLike = raw as unknown as RawIntegrityLike;
+
+  const mapIds = (arr: unknown): number[] => {
+    if (Array.isArray(arr)) {
+      return arr.map((v, i) => safeBigIntToNumber(v, `id[${i}]`));
+    }
+    // Handle typed arrays produced by candid (BigUint64Array / BigInt64Array)
+    if (arr instanceof BigUint64Array || arr instanceof BigInt64Array) {
+      const out: number[] = [];
+      let idx = 0;
+      for (const v of arr as Iterable<bigint>) {
+        out.push(safeBigIntToNumber(v, `id[${idx}]`));
+        idx++;
+      }
+      return out;
+    }
+    // Fallback: generic iterable detection
+    if (arr && typeof (arr as { length?: unknown }) === 'object' && Symbol.iterator in (arr as object)) {
+      try {
+        const pseudo = Array.from(arr as Iterable<unknown>);
+        return pseudo.map((v, i) => safeBigIntToNumber(v, `id[${i}]`));
+      } catch { /* ignore */ }
+    }
+    console.warn('[Integrity] Unexpected id list container', arr);
+    return [];
+  };
+
   const report = {
-    assetCount: Number(raw.asset_count),
-    distributionCount: Number(raw.distribution_count),
-    overAllocated: mapIds(raw.over_allocated_assets),
-    fullyAllocated: mapIds(raw.fully_allocated_assets),
-    partiallyAllocated: mapIds(raw.partially_allocated_assets),
-    unallocated: mapIds(raw.unallocated_assets),
-    issues: raw.issues.slice(),
+    assetCount: safeBigIntToNumber(rawLike.asset_count, 'asset_count'),
+    distributionCount: safeBigIntToNumber(rawLike.distribution_count, 'distribution_count'),
+    overAllocated: mapIds(rawLike.over_allocated_assets),
+    fullyAllocated: mapIds(rawLike.fully_allocated_assets),
+    partiallyAllocated: mapIds(rawLike.partially_allocated_assets),
+    unallocated: mapIds(rawLike.unallocated_assets),
+    issues: Array.isArray(rawLike.issues) ? rawLike.issues.slice() : [],
   };
   console.log('[Integrity] report', report);
   return report;
+}
+
+/**
+ * Fetch the current user object, including last_timer_reset.
+ * Returns null if user not initialized.
+ */
+export async function getUserWithTimer(): Promise<{
+  user: string;
+  last_timer_reset: number | null;
+} | null> {
+  if (!actor.get_user) return null;
+  const res = await withRetry(() => actor.get_user!());
+  if (!res) return null;
+  // Defensive: handle both candid and JS types
+  const userObj = res as { user?: string; last_timer_reset?: number | bigint };
+  const last = userObj.last_timer_reset;
+  return {
+    user: userObj.user ?? "",
+    last_timer_reset: typeof last === "bigint" ? Number(last) : typeof last === "number" ? last : null,
+  };
 }
 
 // Connectivity helper: verify agent/canister reachability and identity
