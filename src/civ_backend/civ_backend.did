@@ -1,11 +1,39 @@
+type AdaptiveKindStats = record {
+  failures : nat64;
+  successes : nat64;
+  dynamic_factor_bps : nat32;
+  last_update : nat64;
+};
+type ApprovalRecord = record {
+  token_id : opt nat64;
+  granted_at : nat64;
+  allowance : opt nat;
+  asset_id : nat64;
+};
+type ApprovalSetInput = record {
+  token_id : opt nat64;
+  allowance : opt nat;
+  asset_id : nat64;
+};
+type ApprovalSetOnChainInput = record {
+  allowance : nat;
+  asset_id : nat64;
+  expires_at : opt nat64;
+};
 type Asset = record {
   id : nat64;
   updated_at : nat64;
+  decimals : opt nat8;
   asset_type : text;
+  token_id : opt nat64;
   value : nat64;
   name : text;
+  token_canister : opt text;
+  chain_wrapped : opt ChainWrappedKind;
   description : text;
   created_at : nat64;
+  holding_mode : opt HoldingMode;
+  nft_standard : opt NftStandard;
 };
 type AssetDistribution = record {
   heir_id : nat64;
@@ -13,21 +41,341 @@ type AssetDistribution = record {
   percentage : nat8;
 };
 type AssetInput = record {
+  decimals : opt nat8;
   asset_type : text;
   value : nat64;
   name : text;
   description : text;
 };
+type AssetTokenMetaInput = record {
+  decimals : opt nat8;
+  token_id : opt nat64;
+  token_canister : opt text;
+  chain_wrapped : opt ChainWrappedKind;
+  holding_mode : opt HoldingMode;
+  nft_standard : opt NftStandard;
+};
+type AuditEvent = record {
+  id : nat64;
+  kind : AuditEventKind;
+  timestamp : nat64;
+};
+type AuditEventKind = variant {
+  DistributionDeleted : record { heir_id : nat64; asset_id : nat64 };
+  NftCustodyReleased : record {
+    heir_id : nat64;
+    token_id : nat64;
+    asset_id : nat64;
+  };
+  HeirSecretBackoffRateLimited : record {
+    heir_id : nat64;
+    wait_secs : nat64;
+    attempts : nat32;
+  };
+  HeirAdded : record { heir_id : nat64 };
+  AuditPruned : record { remaining : nat64; removed : nat64 };
+  CkWithdrawFeeQuoted : record { fee : nat; heir_id : nat64; asset_id : nat64 };
+  HeirPrincipalBound : record { heir_id : nat64 };
+  CkWithdrawRequested : record { heir_id : nat64; asset_id : nat64 };
+  NftCustodyStaged : record {
+    heir_id : nat64;
+    token_id : nat64;
+    asset_id : nat64;
+  };
+  ApprovalRevoked : record { asset_id : nat64 };
+  EscrowReconciliationDiscrepancy : record {
+    note : text;
+    asset_id : nat64;
+    expected_total : nat;
+  };
+  HeirSecretAttemptRateLimited : record { heir_id : nat64; attempts : nat32 };
+  CkWithdrawSubmitted : record { heir_id : nat64; asset_id : nat64 };
+  NotificationSent : record { template : text; success : bool; channel : text };
+  EscrowReleased : record { heir_id : nat64; asset_id : nat64; amount : nat };
+  CkWithdrawReimbursed : record { heir_id : nat64; asset_id : nat64 };
+  FungibleCustodyReleaseAttempt : record {
+    heir_id : nat64;
+    attempt : nat32;
+    asset_id : nat64;
+    amount : nat;
+  };
+  TimerReset;
+  HeirSessionSecretVerified : record { heir_id : nat64; session_id : nat64 };
+  DocUploadFinalized : record {
+    doc_id : nat64;
+    size : nat64;
+    upload_id : nat64;
+  };
+  AssetMetadataUpdated : record { asset_id : nat64 };
+  CkWithdrawFailed : record { heir_id : nat64; error : text; asset_id : nat64 };
+  CkWithdrawCompleted : record { heir_id : nat64; asset_id : nat64 };
+  HeirPayoutPreferenceRateLimited : record {
+    heir_id : nat64;
+    asset_id : nat64;
+  };
+  NotificationQueued : record { template : text; channel : text };
+  HeirUpdated : record { heir_id : nat64 };
+  AssetUpdated : record { asset_id : nat64 };
+  NftCustodyReleaseAttempt : record {
+    heir_id : nat64;
+    token_id : nat64;
+    attempt : nat32;
+    asset_id : nat64;
+  };
+  EscrowReleaseAttempt : record {
+    heir_id : nat64;
+    attempt : nat32;
+    asset_id : nat64;
+    amount : nat;
+  };
+  RetrySucceeded : record { retry_id : nat64; kind : text; attempts : nat32 };
+  EscrowWithdrawn : record { asset_id : nat64; amount : opt nat };
+  FungibleCustodyStaged : record {
+    heir_id : nat64;
+    asset_id : nat64;
+    amount : nat;
+  };
+  CkWithdrawStaged : record { heir_id : nat64; asset_id : nat64; amount : nat };
+  DocUploadAborted : record { upload_id : nat64; reason : text };
+  CustodyWithdrawExecuted : record { heir_id : nat64; asset_id : nat64 };
+  PhaseChanged : record { to : EstatePhase; from : EstatePhase };
+  DocUploadChunkAppended : record { upload_id : nat64; bytes : nat64 };
+  EscrowAutoTopUp : record { asset_id : nat64; amount : nat };
+  HeirSecretVerified : record { heir_id : nat64 };
+  EscrowReleaseFailed : record {
+    heir_id : nat64;
+    attempt : nat32;
+    error : text;
+    asset_id : nat64;
+    amount : nat;
+  };
+  DistributionSet : record { asset_id : nat64 };
+  NftCustodyReleaseFailed : record {
+    heir_id : nat64;
+    token_id : nat64;
+    attempt : nat32;
+    error : text;
+    asset_id : nat64;
+  };
+  UserCreated;
+  DocUploadStarted : record { name : text; upload_id : nat64 };
+  AssetAdded : record { asset_id : nat64 };
+  EscrowDeposited : record { asset_id : nat64; amount : opt nat };
+  RetryTerminal : record { retry_id : nat64; kind : text; attempts : nat32 };
+  HeirSessionExpired : record { heir_id : nat64; session_id : nat64 };
+  DocAccessed : record { heir_id : nat64; doc_id : nat64 };
+  LedgerAttested : record { merkle_root : blob };
+  HeirRemoved : record { heir_id : nat64 };
+  FungibleCustodyReleased : record {
+    heir_id : nat64;
+    asset_id : nat64;
+    amount : nat;
+  };
+  AssetRemoved : record { asset_id : nat64 };
+  BridgePollNotFoundTerminal : record { heir_id : nat64; asset_id : nat64 };
+  EscrowAutoReclaim : record { asset_id : nat64; amount : nat };
+  HeirSessionStarted : record { heir_id : nat64; session_id : nat64 };
+  TriggerExecuted;
+  ClaimLinkCreated : record { heir_id : nat64; link_id : nat64 };
+  CustodyReconciliationDiscrepancy : record {
+    heir_id : nat64;
+    note : text;
+    expected_total : nat;
+  };
+  ApprovalSet : record { asset_id : nat64 };
+  HeirPayoutPreferenceSet : record {
+    to : PayoutPreference;
+    heir_id : nat64;
+    from : PayoutPreference;
+    asset_id : nat64;
+  };
+  FungibleCustodyReleaseFailed : record {
+    heir_id : nat64;
+    attempt : nat32;
+    error : text;
+    asset_id : nat64;
+    amount : nat;
+  };
+  RetryAttempt : record { attempt : nat32; retry_id : nat64; kind : text };
+};
+type BridgeErrorInfo = record { kind : BridgeErrorKind; message : text };
+type BridgeErrorKind = variant {
+  Network;
+  InvalidCanister;
+  UnauthorizedChain;
+  Rejected;
+  RateLimited;
+  Timeout;
+  Other;
+  Reimbursed;
+  FeeShortfall;
+};
+type BridgeStatus = variant {
+  Failed : text;
+  Staged;
+  FeeQuoted;
+  Requested;
+  Submitted;
+  Reimbursed;
+  InProgress;
+  Completed;
+};
+type BridgeTxInfo = record {
+  heir_id : nat64;
+  consecutive_misses : opt nat32;
+  tx_id : opt text;
+  l1_address : text;
+  notfound_terminal : opt bool;
+  asset_id : nat64;
+  submitted_at : nat64;
+};
+type ChainWrappedKind = variant { CkBtc; CkEth };
 type CivError = variant {
   AssetNotFound;
+  EstateNotReady;
   InvalidHeirPercentage;
+  SecretInvalid;
+  ReadinessIssue : text;
+  AlreadyExecuted;
   AssetExists;
   HeirExists;
+  InvalidPayoutPreference;
+  Bridge : BridgeErrorInfo;
+  MissingApproval;
   DistributionAssetNotFound;
+  NftStandardUnsupported : text;
   DistributionHeirNotFound;
+  TransferCallFailed : text;
+  InvalidOwnerPrincipal;
+  EstateLocked;
   HeirNotFound;
+  Unauthorized;
+  AllowanceNotFoundOnChain;
+  AllowanceInsufficient : record { found : nat; needed : nat };
+  NftTransferFailed : text;
+  RateLimited;
+  ReadinessCacheStale;
   Other : text;
+  AlreadyTransferred;
+  TransferFailed;
+  SessionExpired;
   UserNotFound;
+};
+type CkWithdrawRecord = record {
+  heir_id : nat64;
+  staged_at : nat64;
+  effective_fee : opt nat;
+  tx_index : opt nat;
+  quoted_fee : opt nat;
+  bridge_tx_id : opt text;
+  requested_at : opt nat64;
+  bridge_error : opt BridgeErrorInfo;
+  asset_id : nat64;
+  tx_hash : opt text;
+  completed_at : opt nat64;
+  amount : nat;
+  bridge_status : opt BridgeStatus;
+};
+type ClaimLink = record {
+  id : nat64;
+  heir_id : nat64;
+  salt : blob;
+  used : bool;
+  created_at : nat64;
+  code_hash : blob;
+};
+type ClaimLinkUnsealed = record { link_id : nat64; code_plain : text };
+type CustodyReconEntry = record {
+  status : ReconStatus;
+  heir_id : nat64;
+  staged_sum : nat;
+  asset_id : nat64;
+  last_checked : nat64;
+  delta : opt int;
+  on_chain : opt nat;
+};
+type CustodyRecord = record { heir_id : nat64; subaccount : blob };
+type DistributionShare = record {
+  heir_id : nat64;
+  payout_preference : PayoutPreference;
+  asset_id : nat64;
+  percentage : nat8;
+};
+type DocumentAddInput = record { data : blob; name : text; mime_type : text };
+type DocumentChunk = record { data : blob; upload_id : nat64 };
+type DocumentEntry = record {
+  id : nat64;
+  encrypted_data : blob;
+  checksum_sha256 : opt blob;
+  name : text;
+  size : nat64;
+  mime_type : text;
+  created_at : nat64;
+  nonce : blob;
+};
+type DocumentUploadInit = record {
+  expected_plain_size : nat64;
+  name : text;
+  mime_type : text;
+  expected_sha256 : opt blob;
+};
+type DocumentUploadSession = record {
+  received_plain : nat64;
+  expected_plain_size : nat64;
+  name : text;
+  mime_type : text;
+  upload_id : nat64;
+  expected_sha256 : opt blob;
+  plaintext : blob;
+  started_at : nat64;
+};
+type EscrowDepositInput = record {
+  token_id : opt nat64;
+  asset_id : nat64;
+  amount : opt nat;
+};
+type EscrowReconEntry = record {
+  status : ReconStatus;
+  logical_remaining : nat;
+  asset_id : nat64;
+  last_checked : nat64;
+  delta : opt int;
+  on_chain : opt nat;
+};
+type EscrowRecord = record {
+  token_id : opt nat64;
+  deposited_at : nat64;
+  asset_id : nat64;
+  amount : opt nat;
+};
+type EstatePhase = variant { Draft; Locked; Executed; Warning };
+type EstateStatus = record {
+  locked_at : opt nat64;
+  executed_at : opt nat64;
+  phase : EstatePhase;
+  seconds_to_expiry : int64;
+  warning_started_at : opt nat64;
+};
+type ExecutionSummary = record {
+  skipped_count : nat64;
+  failure_count : nat64;
+  auto : bool;
+  total_items : nat64;
+  success_count : nat64;
+  ck_staged_count : nat64;
+  started_at : nat64;
+  finished_at : nat64;
+};
+type FungibleCustodyRecord = record {
+  last_error : opt text;
+  heir_id : nat64;
+  staged_at : nat64;
+  attempts : nat32;
+  releasing : bool;
+  asset_id : nat64;
+  amount : nat;
+  next_attempt_after : opt nat64;
+  released_at : opt nat64;
 };
 type Heir = record {
   id : nat64;
@@ -39,6 +387,49 @@ type Heir = record {
   address : text;
   phone : text;
 };
+type HeirAddInputV2 = record {
+  relationship : text;
+  name : text;
+  email : text;
+  heirPrincipal : opt text;
+  secret_kind : text;
+  address : text;
+  notes : opt text;
+  phone : text;
+  secret_plain : text;
+  identity_claim : opt text;
+};
+type HeirClaimInput = record {
+  heir_id : nat64;
+  heirPrincipal : opt text;
+  secret_plain : opt text;
+};
+type HeirClaimResult = record { verified : bool; principal_bound : bool };
+type HeirEx = record {
+  id : nat64;
+  identity_salt : opt blob;
+  updated_at : nat64;
+  "principal" : opt text;
+  relationship : text;
+  name : text;
+  created_at : nat64;
+  email : text;
+  address : text;
+  notes : opt text;
+  identity_secret : HeirIdentitySecret;
+  phone : text;
+  identity_hash : opt blob;
+};
+type HeirIdentitySecret = record {
+  status : HeirSecretStatus;
+  updated_at : nat64;
+  next_allowed_attempt_at : opt nat64;
+  hash : blob;
+  kind : text;
+  salt : blob;
+  attempts : nat32;
+  last_attempt_at : opt nat64;
+};
 type HeirInput = record {
   relationship : text;
   name : text;
@@ -46,41 +437,260 @@ type HeirInput = record {
   address : text;
   phone : text;
 };
-type Result = variant { Ok; Err : CivError };
-type User = record {
-  distributed : bool;
-  heirs : vec Heir;
-  assets : vec Asset;
-  user : text;
-  distributions : vec AssetDistribution;
-  timer_expiry : nat64;
+type HeirPayoutOverride = record {
+  heir_id : nat64;
+  set_at : nat64;
+  payout_preference : PayoutPreference;
+  asset_id : nat64;
 };
+type HeirSecretStatus = variant { Verified; Pending };
+type HeirSession = record {
+  id : nat64;
+  heir_id : nat64;
+  verified_secret : bool;
+  bound_principal : bool;
+  expires_at : nat64;
+  started_at : nat64;
+};
+type HoldingMode = variant { Escrow; Approval };
 type IntegrityReport = record {
-  asset_count : nat64;
-  distribution_count : nat64;
-  over_allocated_assets : vec nat64;
-  fully_allocated_assets : vec nat64;
-  partially_allocated_assets : vec nat64;
   unallocated_assets : vec nat64;
   issues : vec text;
+  asset_count : nat64;
+  distribution_count : nat64;
+  partially_allocated_assets : vec nat64;
+  over_allocated_assets : vec nat64;
+  fully_allocated_assets : vec nat64;
+};
+type LedgerAttestation = record {
+  transfer_count : nat64;
+  merkle_root : blob;
+  computed_at : nat64;
+};
+type MetricsFrame = record {
+  ts : nat64;
+  custody_discrepancies : nat64;
+  retry_counts : vec record { text; nat64 };
+  escrow_discrepancies : nat64;
+  escrow_totals : vec record { nat64; nat };
+  custody_totals : vec record { nat64; nat };
+};
+type MetricsSnapshot = record {
+  custody_discrepancies : nat64;
+  retry_counts : vec record { text; nat64 };
+  escrow_discrepancies : nat64;
+  escrow_totals : vec record { nat64; nat };
+  custody_totals : vec record { nat64; nat };
+};
+type NftCustodyRecord = record {
+  last_error : opt text;
+  heir_id : nat64;
+  staged_at : nat64;
+  token_id : nat64;
+  attempts : nat32;
+  releasing : bool;
+  asset_id : nat64;
+  next_attempt_after : opt nat64;
+  released_at : opt nat64;
+};
+type NftStandard = variant { Ext; Other : text; Dip721 };
+type NotificationChannel = variant { Sms; Email };
+type NotificationRecord = record {
+  id : nat64;
+  attempts : nat32;
+  template : text;
+  sent_at : opt nat64;
+  success : opt bool;
+  channel : NotificationChannel;
+  queued_at : nat64;
+  payload : text;
+};
+type PayoutOverrideRate = record {
+  heir_id : nat64;
+  day_epoch : nat64;
+  count : nat32;
+  last_set_at : nat64;
+  asset_id : nat64;
+};
+type PayoutPreference = variant { ToCustody; ToPrincipal; CkWithdraw };
+type ReadinessCache = record {
+  issues : vec text;
+  computed_at : nat64;
+  ready : bool;
+};
+type ReadinessReport = record { issues : vec text; ready : bool };
+type ReconStatus = variant { Exact; Surplus; Shortfall; QueryError };
+type Result = variant { Ok; Err : CivError };
+type Result_1 = variant { Ok : nat64; Err : CivError };
+type Result_2 = variant { Ok : blob; Err : CivError };
+type Result_3 = variant { Ok : ClaimLinkUnsealed; Err : CivError };
+type Result_4 = variant { Ok : HeirClaimResult; Err : CivError };
+type Result_5 = variant {
+  Ok : opt record { DocumentEntry; blob };
+  Err : CivError;
+};
+type Result_6 = variant { Ok : bool; Err : CivError };
+type Result_7 = variant { Ok : BridgeTxInfo; Err : CivError };
+type Result_8 = variant { Ok : TransferRecord; Err : CivError };
+type Result_9 = variant { Ok : nat; Err : CivError };
+type RetryItem = record {
+  id : nat64;
+  last_error : opt text;
+  kind : RetryKind;
+  attempts : nat32;
+  created_at : nat64;
+  terminal : bool;
+  next_attempt_after : nat64;
+};
+type RetryKind = variant {
+  EscrowRelease : record { heir_id : nat64; asset_id : nat64 };
+  NftCustodyRelease : record {
+    heir_id : nat64;
+    token_id : nat64;
+    asset_id : nat64;
+  };
+  FungibleCustodyRelease : record { heir_id : nat64; asset_id : nat64 };
+  BridgePoll : record { heir_id : nat64; asset_id : nat64 };
+  BridgeSubmit : record { heir_id : nat64; asset_id : nat64 };
+};
+type TransferErrorKind = variant {
+  NftExt;
+  MissingApproval;
+  NftUnsupported;
+  TransferCallFailed;
+  InvalidOwnerPrincipal;
+  MissingDestinationPrincipal;
+  AllowanceNotFoundOnChain;
+  Other;
+  NftDip721;
+};
+type TransferKind = variant { Nft; Fungible; Document };
+type TransferRecord = record {
+  id : nat64;
+  heir_id : opt nat64;
+  tx_index : opt nat;
+  kind : TransferKind;
+  note : opt text;
+  error : opt text;
+  payout_preference : opt PayoutPreference;
+  timestamp : nat64;
+  asset_id : opt nat64;
+  amount : opt nat;
+  error_kind : opt TransferErrorKind;
+};
+type User = record {
+  retry_adaptive : opt vec record { text; AdaptiveKindStats };
+  locked_at : opt nat64;
+  documents : vec DocumentEntry;
+  distributions_v2 : vec DistributionShare;
+  distributed : bool;
+  last_execution_summary : opt ExecutionSummary;
+  executed_at : opt nat64;
+  escrow_recon : opt vec EscrowReconEntry;
+  heirs : vec Heir;
+  doc_master_key : opt blob;
+  nft_custody : vec NftCustodyRecord;
+  notifications : vec NotificationRecord;
+  transfers : vec TransferRecord;
+  assets : vec Asset;
+  user : text;
+  retry_queue : opt vec RetryItem;
+  audit_log : vec AuditEvent;
+  custody : vec CustodyRecord;
+  payout_overrides : vec HeirPayoutOverride;
+  custody_recon : opt vec CustodyReconEntry;
+  distributions : vec AssetDistribution;
+  timer_expiry : nat64;
+  fungible_custody : vec FungibleCustodyRecord;
+  ck_withdraws : vec CkWithdrawRecord;
+  claim_links : vec ClaimLink;
+  schema_version : nat16;
+  heirs_v2 : vec HeirEx;
+  sessions : vec HeirSession;
+  readiness_cache : opt ReadinessCache;
+  metrics_history : vec MetricsFrame;
+  phase : EstatePhase;
+  ledger_attestation : opt LedgerAttestation;
+  doc_uploads : opt vec DocumentUploadSession;
+  execution_nonce : opt nat64;
+  bridge_txs : vec BridgeTxInfo;
+  escrow : vec EscrowRecord;
+  warning_started_at : opt nat64;
+  approvals : vec ApprovalRecord;
+  payout_override_rates : opt vec PayoutOverrideRate;
+  last_timer_reset : nat64;
 };
 service : {
   __get_candid_interface_tmp_hack : () -> (text) query;
+  abort_document_upload : (nat64, text) -> (Result);
   add_asset : (AssetInput) -> (Result);
+  add_document : (DocumentAddInput) -> (Result_1);
   add_heir : (HeirInput) -> (Result);
-  assign_distributions : (vec AssetDistribution) -> (Result);
+  add_heir_v2 : (HeirAddInputV2) -> (Result_1);
+  approval_revoke : (nat64) -> (Result);
+  approval_set : (ApprovalSetInput) -> (Result);
+  approval_set_icrc2 : (ApprovalSetOnChainInput) -> (Result);
+  bind_heir_principal : (nat64, text) -> (Result);
+  check_integrity : () -> (IntegrityReport) query;
+  compute_ledger_attestation : () -> (Result_2);
+  create_claim_link : (nat64) -> (Result_3);
+  custody_subaccount_for_heir : (nat64) -> (Result_2) query;
+  delete_distribution : (nat64, nat64) -> (Result);
+  deposit_escrow : (EscrowDepositInput) -> (Result);
+  enqueue_notification : (text, text, text) -> (Result_1);
+  estate_readiness : () -> (ReadinessReport) query;
+  estate_status : () -> (EstateStatus) query;
+  execute_trigger : () -> (Result);
+  finalize_document_upload : (nat64) -> (Result_1);
   get_asset_distributions : (nat64) -> (vec AssetDistribution) query;
-  get_distribution : () -> (vec record { text; nat64 }) query;
+  get_asset_distributions_v2 : (nat64) -> (vec DistributionShare) query;
+  get_custody_reconciliation : () -> (opt vec CustodyReconEntry) query;
   get_timer : () -> (int64) query;
   get_user : () -> (opt User) query;
+  heir_begin_claim : (nat64, text) -> (Result_1);
+  heir_bind_principal_session : (nat64, text) -> (Result);
+  heir_claim : (HeirClaimInput) -> (Result_4);
+  heir_get_document : (nat64, nat64) -> (Result_5) query;
+  heir_set_payout_preference_session : (nat64, nat64, PayoutPreference) -> (
+      Result,
+    );
+  heir_verify_identity_session : (nat64, text) -> (Result_6);
+  heir_verify_secret_session : (nat64, text) -> (Result_6);
+  last_execution_summary : () -> (opt ExecutionSummary) query;
+  list_approvals : () -> (vec ApprovalRecord) query;
   list_assets : () -> (vec Asset) query;
-  list_distributions : () -> (vec AssetDistribution) query;
+  list_audit_log : () -> (vec AuditEvent) query;
+  list_audit_log_filtered : (nat64, nat64, opt nat64, opt nat64) -> (
+      vec AuditEvent,
+    ) query;
+  list_audit_log_paged : (nat64, nat64) -> (vec AuditEvent) query;
+  list_ck_withdraws : () -> (vec CkWithdrawRecord) query;
+  list_documents : () -> (vec DocumentEntry) query;
+  list_escrow : () -> (vec EscrowRecord) query;
   list_heirs : () -> (vec Heir) query;
+  list_heirs_v2 : () -> (vec HeirEx) query;
+  list_notifications : () -> (vec NotificationRecord) query;
+  list_transfers : () -> (vec TransferRecord) query;
+  lock_estate : () -> (Result);
+  metrics_snapshot : () -> (MetricsSnapshot) query;
+  perform_maintenance : () -> (Result);
+  poll_ck_withdraw : (nat64, nat64, nat64) -> (Result);
+  reconcile_custody : () -> (vec CustodyReconEntry);
   remove_asset : (nat64) -> (Result);
   remove_heir : (nat64) -> (Result);
+  request_ck_withdraw : (nat64, nat64, nat64) -> (Result);
   reset_timer : () -> (Result);
   set_asset_distributions : (nat64, vec AssetDistribution) -> (Result);
+  set_distribution_v2 : (nat64, vec DistributionShare) -> (Result);
+  start_document_upload : (DocumentUploadInit) -> (Result_1);
+  start_warning : () -> (Result);
+  submit_ck_withdraw : (nat64, nat64, nat64, text) -> (Result_7);
   update_asset : (nat64, AssetInput) -> (Result);
+  update_asset_token_meta : (nat64, AssetTokenMetaInput) -> (Result);
   update_heir : (nat64, HeirInput) -> (Result);
-  check_integrity : () -> (IntegrityReport) query;
+  upload_document_chunk : (DocumentChunk) -> (Result_1);
+  verify_heir_secret : (nat64, text) -> (Result_6);
+  withdraw_custody : (nat64, nat64) -> (Result_8);
+  withdraw_escrow : (nat64) -> (Result);
+  withdraw_escrow_icrc1 : (nat64, opt nat) -> (Result_9);
 }
