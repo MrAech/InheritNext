@@ -7,9 +7,14 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-candid = "0.10"
+candid = { version = "0.10", features = ["value"] }
 ic-cdk = "0.18.5"
-ic-cdk-timers = "0.12.2" # Feel free to remove this dependency if you don't need timersy
-
+ic-cdk-timers = "0.12.2" # Feel free to remove this dependency if you don't need timers
 serde = { version = "1.0", features = ["derive"] }
 ic-cdk-macros = "0.18.5"
+sha2 = "0.10"
+chacha20 = "0.9"
+chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc"] }
+hex = "0.4"
+num-traits = "0.2"
+async-trait = "0.1"
