@@ -55,3 +55,5 @@ pub struct HeirAddInputV2 {
     pub identity_claim: Option<String>,
     pub notes: Option<String>,
 }
+
+// HeirSecretStatus is already public via base module re-export in models::base; no local re-export needed.

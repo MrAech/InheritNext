@@ -1,7 +1,6 @@
 use crate::models::{AuditEvent, AuditEventKind, User};
 use crate::time::now_secs;
 
-
 pub fn push_audit(user: &mut User, kind: AuditEventKind) {
     let next_id = user.audit_log.iter().map(|e| e.id).max().unwrap_or(0) + 1;
     user.audit_log.push(AuditEvent {
