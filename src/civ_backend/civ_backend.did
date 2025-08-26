@@ -23,7 +23,7 @@ type ApprovalSetOnChainInput = record {
 type Asset = record {
   id : nat64;
   updated_at : nat64;
-  decimals : opt nat8;
+  decimals : nat8;
   asset_type : text;
   token_id : opt nat64;
   value : nat64;
@@ -34,6 +34,7 @@ type Asset = record {
   created_at : nat64;
   holding_mode : opt HoldingMode;
   nft_standard : opt NftStandard;
+  file_path : opt text;
 };
 type AssetDistribution = record {
   heir_id : nat64;
@@ -41,14 +42,24 @@ type AssetDistribution = record {
   percentage : nat8;
 };
 type AssetInput = record {
-  decimals : opt nat8;
   asset_type : text;
-  value : nat64;
   name : text;
   description : text;
+  # Optional friendly kind string sent by the frontend (Fungible | NFT | ChainWrapped | Document)
+  kind : opt text;
+  # Optional chain/token references that the frontend may provide when linking an on-chain asset
+  token_canister : opt text;
+  token_id : opt nat64;
+  # For document assets the frontend may include an optional file path placeholder
+  file_path : opt text;
+  # Optional fields the frontend may send to indicate how the asset should be treated
+  holding_mode : opt HoldingMode;
+  nft_standard : opt NftStandard;
+  chain_wrapped : opt ChainWrappedKind;
 };
 type AssetTokenMetaInput = record {
   decimals : opt nat8;
+  value : opt nat;
   token_id : opt nat64;
   token_canister : opt text;
   chain_wrapped : opt ChainWrappedKind;

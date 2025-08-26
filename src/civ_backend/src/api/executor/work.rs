@@ -266,7 +266,7 @@ pub(crate) fn snapshot_workitems(caller: &str) -> Result<Vec<WorkItem>, CivError
             for a in u.assets.iter() {
                 let kind = crate::models::infer_asset_kind(&a.asset_type);
                 if matches!(kind, AssetKind::Fungible | AssetKind::ChainWrapped)
-                    && a.decimals.is_none()
+                    && a.decimals == 0
                 {
                     missing_decimals = true;
                     break;
@@ -477,13 +477,13 @@ fn handle_escrow(
                     if let Some(a) = asset {
                         (esc_amount, pct, a.token_canister.clone(), a.decimals)
                     } else {
-                        (esc_amount, pct, None, None)
+                        (esc_amount, pct, None, 0u8)
                     }
                 } else {
-                    (None, 0, None, None)
+                    (None, 0, None, 0u8)
                 }
             });
-            let (esc_amount_opt, pct, token_can_txt, decimals_opt) = snapshot;
+            let (esc_amount_opt, pct, token_can_txt, _decimals_opt) = snapshot;
             let escrow_total = esc_amount_opt.unwrap_or(0);
             if escrow_total == 0 || pct == 0 {
                 return (Some(0), None, Some("escrow_release_zero".into()), None);
@@ -578,7 +578,7 @@ async fn handle_fungible_transfer(
     let mut error: Option<String> = None;
     if let Some(can_txt) = &w.token_canister {
         if let Ok(principal) = Principal::from_text(can_txt) {
-            let (asset_value, pct, decimals_opt) = USERS.with(|users| {
+            let (asset_value, pct, decimals) = USERS.with(|users| {
                 let users = users.borrow();
                 if let Some(u) = users.get(caller) {
                     let asset = u.assets.iter().find(|a| a.id == w.asset_id);
@@ -589,18 +589,18 @@ async fn handle_fungible_transfer(
                     if let (Some(a), Some(s)) = (asset, share) {
                         (a.value as u128, s.percentage as u128, a.decimals)
                     } else {
-                        (0, 0, None)
+                        (0u128, 0u128, 0u8)
                     }
                 } else {
-                    (0, 0, None)
+                    (0u128, 0u128, 0u8)
                 }
             });
             let raw_amount = asset_value
                 .saturating_mul(pct)
                 .checked_div(100)
                 .unwrap_or(0);
-            let transfer_amount = if let Some(dec) = decimals_opt {
-                raw_amount.saturating_mul(10u128.saturating_pow(dec as u32))
+            let transfer_amount = if decimals != 0 {
+                raw_amount.saturating_mul(10u128.saturating_pow(decimals as u32))
             } else {
                 raw_amount
             };

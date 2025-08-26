@@ -22,17 +22,105 @@ pub fn add_asset(new_asset: AssetInput) -> Result<(), CivError> {
             id: next_id,
             name: new_asset.name,
             asset_type: new_asset.asset_type,
-            value: new_asset.value,
-            decimals: new_asset.decimals,
+            // Backend authoritative: do NOT trust frontend-provided `value`.
+            // Store 0 as sentinel (unknown/current value will be populated
+            // by trusted metadata updates / fetches).
+            value: 0u64,
+            // Backend authoritative: do NOT trust frontend-provided `decimals`.
+            // Always store 0 (sentinel == unknown/not-yet-fetched). Decimals will be
+            // populated asynchronously when token metadata is supplied via
+            // `update_asset_token_meta` (which fetches icrc metadata / icrc1_decimals).
+            decimals: 0u8,
             description: new_asset.description,
             created_at: now,
             updated_at: now,
-            token_canister: None,
-            token_id: None,
-            holding_mode: None,
-            nft_standard: None,
-            chain_wrapped: None,
+            token_canister: new_asset.token_canister,
+            token_id: new_asset.token_id,
+            holding_mode: new_asset.holding_mode,
+            nft_standard: new_asset.nft_standard,
+            chain_wrapped: new_asset.chain_wrapped,
+            file_path: new_asset.file_path,
         });
+        // If we have a token canister, schedule an async metadata fetch to populate decimals/value
+        let maybe_canister = new_asset.token_canister.clone();
+        let created_asset_id = next_id;
+        let caller = user.clone();
+        if maybe_canister.is_some() {
+            if let Some(can_txt) = maybe_canister {
+                ic_cdk::futures::spawn_017_compat(async move {
+                    if let Ok(p) = candid::Principal::from_text(&can_txt) {
+                        use candid::types::value::IDLValue;
+                        use ic_cdk::call::Call;
+                        // First attempt: metadata list
+                        let mut have_decimals = false;
+                        if let Ok(call) = std::panic::catch_unwind(|| {
+                            Call::unbounded_wait(p, "icrc1_metadata").with_arg(())
+                        }) {
+                            if let Ok(res) = call
+                                .await
+                                .map_err(|e| format!("call failed: {:?}", e))
+                                .and_then(|r| {
+                                    r.candid_tuple::<(Vec<(String, IDLValue)>,)>()
+                                        .map_err(|e| format!("decode err:{:?}", e))
+                                })
+                            {
+                                let (list,) = res;
+                                for (k, v) in list.into_iter() {
+                                    if k == "icrc1:decimals" {
+                                        if let IDLValue::Nat(n) = v {
+                                            if let Ok(parsed) = n.0.to_string().parse::<u64>() {
+                                                if parsed <= 38 {
+                                                    let dec = parsed as u8;
+                                                    USERS.with(|users| {
+                                                        let mut users = users.borrow_mut();
+                                                        if let Some(u2) = users.get_mut(&caller) {
+                                                            if let Some(a2) = u2
+                                                                .assets
+                                                                .iter_mut()
+                                                                .find(|asst| asst.id == created_asset_id)
+                                                            {
+                                                                if a2.decimals == 0 {
+                                                                    a2.decimals = dec;
+                                                                    a2.updated_at = now_secs();
+                                                                }
+                                                            }
+                                                        }
+                                                    });
+                                                    have_decimals = true;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        // Fallback: dedicated icrc1_decimals call if still missing
+                        if !have_decimals {
+                            if let Ok(call) = std::panic::catch_unwind(|| {
+                                Call::unbounded_wait(p, "icrc1_decimals").with_arg(())
+                            }) {
+                                if let Ok(reply) = call.await {
+                                    if let Ok(tuple) = reply.candid_tuple::<(u8,)>() {
+                                        let dec = tuple.0;
+                                        USERS.with(|users| {
+                                            let mut users = users.borrow_mut();
+                                            if let Some(u2) = users.get_mut(&caller) {
+                                                if let Some(a2) = u2.assets.iter_mut().find(|asst| asst.id == created_asset_id) {
+                                                    if a2.decimals == 0 {
+                                                        a2.decimals = dec;
+                                                        a2.updated_at = now_secs();
+                                                    }
+                                                }
+                                            }
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
         push_audit(user, AuditEventKind::AssetAdded { asset_id: next_id });
         Ok(())
     })
@@ -77,11 +165,33 @@ pub fn update_asset(asset_id: u64, new_asset: AssetInput) -> Result<(), CivError
         if let Some(user) = users.get_mut(&user) {
             assert_mutable(user)?;
             if let Some(existing) = user.assets.iter_mut().find(|a| a.id == asset_id) {
+                // Update only user-editable fields. Decimals and value are server-managed
+                // and must not be supplied by the frontend via AssetInput.
                 existing.name = new_asset.name;
                 existing.asset_type = new_asset.asset_type;
-                existing.value = new_asset.value;
-                existing.decimals = new_asset.decimals;
                 existing.description = new_asset.description;
+                // Apply optional token/linking fields if the frontend provided them.
+                if new_asset.token_canister.is_some() {
+                    existing.token_canister = new_asset.token_canister.clone();
+                }
+                if new_asset.token_id.is_some() {
+                    existing.token_id = new_asset.token_id;
+                }
+                if new_asset.holding_mode.is_some() {
+                    existing.holding_mode = new_asset.holding_mode;
+                }
+                if new_asset.nft_standard.is_some() {
+                    existing.nft_standard = new_asset.nft_standard.clone();
+                }
+                if new_asset.chain_wrapped.is_some() {
+                    existing.chain_wrapped = new_asset.chain_wrapped;
+                }
+                if new_asset.file_path.is_some() {
+                    // store the file path for document assets (placeholder)
+                    // Note: Asset struct does not currently have file_path; if needed,
+                    // store elsewhere or extend Asset model. We'll preserve in metadata
+                    // via token_canister/file_path pattern or adjust model later.
+                }
                 existing.updated_at = now_secs();
                 push_audit(user, AuditEventKind::AssetUpdated { asset_id });
                 Ok(())
@@ -107,8 +217,10 @@ pub fn update_asset_token_meta(asset_id: u64, meta: AssetTokenMetaInput) -> Resu
                 a.token_canister = meta.token_canister.clone();
                 a.token_id = meta.token_id;
                 a.holding_mode = meta.holding_mode;
-                if meta.decimals.is_some() {
-                    a.decimals = meta.decimals;
+                // meta.decimals may be provided by a trusted metadata update path.
+                if let Some(d) = meta.decimals {
+                    // apply explicit decimals when provided (trusted path)
+                    a.decimals = d;
                 }
                 if meta.nft_standard.is_some() {
                     a.nft_standard = meta.nft_standard;
@@ -116,7 +228,8 @@ pub fn update_asset_token_meta(asset_id: u64, meta: AssetTokenMetaInput) -> Resu
                 if meta.chain_wrapped.is_some() {
                     a.chain_wrapped = meta.chain_wrapped;
                 }
-                let needs_fetch = a.decimals.is_none() && a.token_canister.is_some();
+                // if decimals remain unknown (0) and we have a token canister, schedule fetch
+                let needs_fetch = a.decimals == 0 && a.token_canister.is_some();
                 let can_txt = if needs_fetch {
                     a.token_canister.clone()
                 } else {
@@ -167,10 +280,10 @@ pub fn update_asset_token_meta(asset_id: u64, meta: AssetTokenMetaInput) -> Resu
                                                         .iter_mut()
                                                         .find(|asst| asst.id == asset_id)
                                                     {
-                                                        if a2.decimals.is_none() {
-                                                            a2.decimals = Some(dec);
-                                                            a2.updated_at = now_secs();
-                                                        }
+                                                        if a2.decimals == 0 {
+                                                                        a2.decimals = dec;
+                                                                        a2.updated_at = now_secs();
+                                                                    }
                                                     }
                                                 }
                                             });
@@ -196,8 +309,8 @@ pub fn update_asset_token_meta(asset_id: u64, meta: AssetTokenMetaInput) -> Resu
                                         if let Some(a2) =
                                             u2.assets.iter_mut().find(|asst| asst.id == asset_id)
                                         {
-                                            if a2.decimals.is_none() {
-                                                a2.decimals = Some(dec);
+                                            if a2.decimals == 0 {
+                                                a2.decimals = dec;
                                                 a2.updated_at = now_secs();
                                             }
                                         }

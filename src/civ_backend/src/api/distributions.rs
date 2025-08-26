@@ -46,7 +46,7 @@ pub fn estate_readiness() -> ReadinessReport {
             for a in u.assets.iter() {
                 let kind = crate::models::infer_asset_kind(&a.asset_type);
                 if matches!(kind, AssetKind::Fungible | AssetKind::ChainWrapped)
-                    && a.decimals.is_none()
+                    && a.decimals == 0
                 {
                     issues.push(format!("asset_{}_missing_decimals", a.id));
                 }
