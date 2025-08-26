@@ -1,8 +1,11 @@
 use crate::api::common::{assert_mutable, user_id};
 use crate::audit::push_audit;
-use crate::models::{Asset, AssetInput, AssetTokenMetaInput, AuditEventKind, CivError, User};
+use crate::models::{
+    Asset, AssetInput, AssetTokenMetaInput, AuditEventKind, CivError, User, AssetKind,
+};
 use crate::storage::USERS;
 use crate::time::now_secs;
+use crate::rng;
 
 // Asset CRUD operations.
 // Note: Timer now starts on first distribution, not asset add.
@@ -18,20 +21,47 @@ pub fn add_asset(new_asset: AssetInput) -> Result<(), CivError> {
         });
         assert_mutable(user)?;
         let next_id = user.assets.iter().map(|a| a.id).max().unwrap_or(0) + 1;
+        // Determine defaults depending on kind
+    let mut decimals = new_asset.decimals;
+    // If frontend did not provide a value, backend will simulate/generate it
+    let mut simulated_value = new_asset.value.unwrap_or(0u64);
+        // If fungible or chain wrapped and decimals not provided, attempt to simulate
+        if (new_asset.kind == AssetKind::Fungible || new_asset.kind == AssetKind::ChainWrapped)
+            && decimals.is_none()
+        {
+            // try_u64 may return None if RNG not initialized; fallback to 8
+            if let Some(r) = rng::try_u64() {
+                // small deterministic-ish decimals in range 0..=18
+                let dec = (r % 19) as u8; // 0..18
+                decimals = Some(dec);
+                // create a simulated value using randomness
+                // if frontend didn't supply a value use generated small positive value
+                if new_asset.value.is_none() {
+                    simulated_value = (r % 10_000u64) + 1; // small positive value
+                } else {
+                    simulated_value = new_asset.value.unwrap_or(0);
+                }
+            } else {
+                decimals = Some(8);
+            }
+        }
+
         user.assets.push(Asset {
             id: next_id,
             name: new_asset.name,
             asset_type: new_asset.asset_type,
-            value: new_asset.value,
-            decimals: new_asset.decimals,
+            kind: new_asset.kind,
+            value: simulated_value,
+            decimals,
             description: new_asset.description,
             created_at: now,
             updated_at: now,
-            token_canister: None,
-            token_id: None,
-            holding_mode: None,
+            token_canister: new_asset.token_canister,
+            token_id: new_asset.token_id,
+            holding_mode: new_asset.holding_mode,
             nft_standard: None,
             chain_wrapped: None,
+            file_path: new_asset.file_path,
         });
         push_audit(user, AuditEventKind::AssetAdded { asset_id: next_id });
         Ok(())
@@ -79,9 +109,29 @@ pub fn update_asset(asset_id: u64, new_asset: AssetInput) -> Result<(), CivError
             if let Some(existing) = user.assets.iter_mut().find(|a| a.id == asset_id) {
                 existing.name = new_asset.name;
                 existing.asset_type = new_asset.asset_type;
-                existing.value = new_asset.value;
-                existing.decimals = new_asset.decimals;
+                existing.kind = new_asset.kind;
                 existing.description = new_asset.description;
+                // For fungible/chain wrapped we allow backend to keep simulated value/decimals
+                // If caller provided a new value, update it; otherwise leave simulated value intact
+                if let Some(v) = new_asset.value {
+                    existing.value = v;
+                }
+                if new_asset.decimals.is_some() {
+                    existing.decimals = new_asset.decimals;
+                }
+                // update optional metadata if provided
+                if new_asset.token_canister.is_some() {
+                    existing.token_canister = new_asset.token_canister.clone();
+                }
+                if new_asset.token_id.is_some() {
+                    existing.token_id = new_asset.token_id;
+                }
+                if new_asset.file_path.is_some() {
+                    existing.file_path = new_asset.file_path.clone();
+                }
+                if new_asset.holding_mode.is_some() {
+                    existing.holding_mode = new_asset.holding_mode;
+                }
                 existing.updated_at = now_secs();
                 push_audit(user, AuditEventKind::AssetUpdated { asset_id });
                 Ok(())

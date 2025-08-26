@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Actor, HttpAgent, type ActorSubclass, type Identity } from "@dfinity/agent";
 import { IDL } from "@dfinity/candid";
 import type {
@@ -17,10 +18,18 @@ type ServiceAsset = {
   id: bigint;
   name: string;
   asset_type: string;
+  kind: number | string; // candid enum represented as number or string depending on generated declarations
   value: bigint;
+  decimals: bigint | null | undefined;
   description: string;
   created_at: bigint;
   updated_at: bigint;
+  token_canister: string | null | undefined;
+  token_id: bigint | null | undefined;
+  holding_mode: number | string | null | undefined;
+  nft_standard: number | string | null | undefined;
+  chain_wrapped: number | string | null | undefined;
+  file_path: string | null | undefined;
 };
 
 type ServiceHeir = {
@@ -67,7 +76,7 @@ interface Service {
   // optional get_user for connectivity check
   get_user?: () => Promise<ServiceUser | null>;
   add_asset: (asset: { name: string; asset_type: string; value: bigint; description: string }) => Promise<ServiceResult>;
-  update_asset: (id: bigint, asset: { name: string; asset_type: string; value: bigint; description: string }) => Promise<ServiceResult>;
+  update_asset: (id: bigint, asset: { name: string; asset_type: string; kind: number | string; value: bigint; decimals?: number | null; description: string; token_canister?: string | null; token_id?: bigint | null; file_path?: string | null; holding_mode?: number | string | null; }) => Promise<ServiceResult>;
   remove_asset: (id: bigint) => Promise<ServiceResult>;
   list_assets: () => Promise<ServiceAsset[]>;
 
@@ -189,10 +198,18 @@ export async function listAssets(): Promise<Asset[]> {
     id: Number(a.id),
     name: a.name,
     asset_type: a.asset_type,
+    kind: typeof a.kind === 'string' ? (a.kind as string) : typeof a.kind === 'number' ? String(a.kind) : undefined,
     value: Number(a.value),
+    decimals: a.decimals === null || a.decimals === undefined ? undefined : Number(a.decimals),
     description: a.description,
     created_at: Number(a.created_at),
     updated_at: Number(a.updated_at),
+    token_canister: a.token_canister ?? undefined,
+    token_id: a.token_id === null || a.token_id === undefined ? undefined : Number(a.token_id),
+    holding_mode: a.holding_mode === null || a.holding_mode === undefined ? undefined : (typeof a.holding_mode === 'string' ? a.holding_mode : String(a.holding_mode)),
+    nft_standard: a.nft_standard === null || a.nft_standard === undefined ? undefined : (typeof a.nft_standard === 'string' ? a.nft_standard : String(a.nft_standard)),
+    chain_wrapped: a.chain_wrapped === null || a.chain_wrapped === undefined ? undefined : (typeof a.chain_wrapped === 'string' ? a.chain_wrapped : String(a.chain_wrapped)),
+    file_path: a.file_path ?? undefined,
   }));
 }
 
@@ -217,8 +234,22 @@ export async function listDistributions(): Promise<AssetDistribution[]> {
 
 export async function addAsset(asset: AssetInput): Promise<boolean> {
   console.log(`addAsset called: name=${asset.name}, type=${asset.asset_type}, value=${asset.value}`);
-  const assetToSend = { ...asset, value: BigInt(asset.value) };
-  const result = await withRetry(() => actor.add_asset(assetToSend));
+  const assetToSend: unknown = {
+    name: asset.name,
+    asset_type: asset.asset_type,
+    kind: (asset.kind as unknown) || undefined,
+  value: asset.value,
+    decimals: typeof asset.decimals === 'number' ? Number(asset.decimals) : undefined,
+    description: asset.description,
+    // nft_standard and chain_wrapped are optional enums; pass through if provided
+    nft_standard: (asset as any).nft_standard ?? undefined,
+    chain_wrapped: (asset as any).chain_wrapped ?? undefined,
+    token_canister: asset.token_canister ?? undefined,
+    token_id: asset.token_id !== undefined && asset.token_id !== null ? BigInt(asset.token_id) : undefined,
+    file_path: asset.file_path ?? undefined,
+    holding_mode: asset.holding_mode ?? undefined,
+  };
+  const result = await withRetry(() => actor.add_asset(assetToSend as unknown as any));
   const ok = 'Ok' in result;
   if (ok) {
     console.log("onAssetAdded callback triggered");
@@ -233,8 +264,21 @@ export async function addAsset(asset: AssetInput): Promise<boolean> {
 }
 
 export async function updateAsset(id: number, asset: AssetInput): Promise<boolean> {
-  const assetToSend = { ...asset, value: BigInt(asset.value) };
-  const result = await withRetry(() => actor.update_asset(BigInt(id), assetToSend));
+  const assetToSend: unknown = {
+    name: asset.name,
+    asset_type: asset.asset_type,
+    kind: (asset.kind as unknown) || undefined,
+  value: asset.value,
+    decimals: typeof asset.decimals === 'number' ? Number(asset.decimals) : undefined,
+    description: asset.description,
+    nft_standard: (asset as any).nft_standard ?? undefined,
+    chain_wrapped: (asset as any).chain_wrapped ?? undefined,
+    token_canister: asset.token_canister ?? undefined,
+    token_id: asset.token_id !== undefined && asset.token_id !== null ? BigInt(asset.token_id) : undefined,
+    file_path: asset.file_path ?? undefined,
+    holding_mode: asset.holding_mode ?? undefined,
+  };
+  const result = await withRetry(() => actor.update_asset(BigInt(id), assetToSend as unknown as any));
   return 'Ok' in result;
 }
 

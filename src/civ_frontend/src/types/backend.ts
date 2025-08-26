@@ -2,6 +2,7 @@ export interface Asset {
   id: number;
   name: string;
   asset_type: string;
+  kind?: "Fungible" | "NFT" | "ChainWrapped" | "Document" | string;
   value: number;
   description: string;
   created_at: number;
@@ -11,8 +12,14 @@ export interface Asset {
 export interface AssetInput {
   name: string;
   asset_type: string;
-  value: bigint;
+  kind?: "Fungible" | "NFT" | "ChainWrapped" | "Document" | string;
+  value?: bigint;
   description: string;
+  decimals?: number | null;
+  token_canister?: string | null;
+  token_id?: number | null;
+  file_path?: string | null;
+  holding_mode?: "Escrow" | "Approval" | null;
 }
 
 export interface Heir {
