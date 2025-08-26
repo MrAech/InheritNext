@@ -127,6 +127,11 @@ pub async fn fill_async(out: &mut [u8]) {
     });
 }
 
+/// Returns true when RNG has been seeded/initialized.
+pub fn is_initialized() -> bool {
+    RNG_STATE.with(|cell| cell.borrow().is_some())
+}
+
 // Sync wrapper for query/update contexts where we want to block until bytes ready.
 // (We cannot truly block on async in update; instead design callers to be async if they need randomness.)
 // For legacy sync call sites, we provide a lazy future poll via block_on style using ic_cdk::spawn not possible.

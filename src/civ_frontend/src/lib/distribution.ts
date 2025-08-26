@@ -28,12 +28,15 @@ const isBrowser = typeof window !== "undefined";
 const host = isBrowser ? window.location.host : "";
 const hostname = isBrowser ? window.location.hostname : "";
 const isLocalDev = /\.localhost:4943$/.test(host);
+const isFrontendLocalhost = isBrowser && (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0');
 const isIC = hostname.endsWith(".ic0.app") || hostname.endsWith(".icp0.io") || (typeof process !== "undefined" && process.env && process.env.DFX_NETWORK === "ic");
 const agentHost = isLocalDev
   ? window.location.origin
   : isIC
     ? "https://icp-api.io"
-    : (backendCanisterId ? `http://${backendCanisterId}.localhost:4943` : "http://127.0.0.1:4943");
+    : (isFrontendLocalhost
+      ? "http://127.0.0.1:4943"
+      : (backendCanisterId ? `http://${backendCanisterId}.localhost:4943` : "http://127.0.0.1:4943"));
 
 let actor: ActorSubclass<DistService>;
 

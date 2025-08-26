@@ -95,12 +95,18 @@ const isBrowser = typeof window !== "undefined";
 const host = isBrowser ? window.location.host : "";
 const hostname = isBrowser ? window.location.hostname : "";
 const isLocalDev = /\.localhost:4943$/.test(host);
+// Running the frontend dev server (npm run dev) will set hostname to 'localhost' or '127.0.0.1'.
+// Detect that and prefer the replica base host (127.0.0.1:4943) so the dev server can talk
+// to a dfx-deployed backend without needing the frontend to be deployed as a canister.
+const isFrontendLocalhost = isBrowser && (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0');
 const isIC = hostname.endsWith(".ic0.app") || hostname.endsWith(".icp0.io") || (typeof process !== "undefined" && process.env && process.env.DFX_NETWORK === "ic");
 const agentHost = isLocalDev
   ? window.location.origin
   : isIC
     ? "https://icp-api.io"
-    : (backendCanisterId ? `http://${backendCanisterId}.localhost:4943` : "http://127.0.0.1:4943");
+    : (isFrontendLocalhost
+      ? "http://127.0.0.1:4943"
+      : (backendCanisterId ? `http://${backendCanisterId}.localhost:4943` : "http://127.0.0.1:4943"));
 // TODO: FIXME: use something other than this depricated httpAgent @gaurisingh73
 let actor: ActorSubclass<Service>;
 let lastRootKeyHash: string | null = null;

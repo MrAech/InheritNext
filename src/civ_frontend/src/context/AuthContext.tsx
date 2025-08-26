@@ -109,7 +109,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const identityProvider =
       network === "ic"
         ? "https://identity.ic0.app"
-        : (iiCanisterId ? `http://${iiCanisterId}.localhost:4943/` : "http://localhost:4943/");
+        : (() => {
+            const isBrowser = typeof window !== 'undefined';
+            const hostname = isBrowser ? window.location.hostname : '';
+            const isFrontendLocalhost = isBrowser && (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0');
+            // When running the frontend dev server on localhost, we must provide the
+            // Internet Identity canister host (including its canister id) so the
+            // Internet Identity UI knows where to serve the login page and return
+            // to the correct origin.
+            if (isFrontendLocalhost) {
+              if (iiCanisterId) return `http://${iiCanisterId}.localhost:4943/`;
+              return 'http://127.0.0.1:4943/';
+            }
+            return iiCanisterId ? `http://${iiCanisterId}.localhost:4943/` : 'http://localhost:4943/';
+          })();
 
     await authClient.login({
       identityProvider,

@@ -389,17 +389,24 @@ fn pre_upgrade() {
 #[ic_cdk_macros::post_upgrade]
 fn post_upgrade() {
     executor::post_upgrade();
-    ic_cdk::spawn(async {
-        rng::init_rng().await;
-    });
 }
 
 // Ensure RNG seeded on fresh install
 #[ic_cdk_macros::init]
 fn init() {
-    ic_cdk::spawn(async {
-        rng::init_rng().await;
-    });
+}
+
+// Provide explicit initialization entrypoint to avoid calling management canister
+// APIs during the synchronous `init`/install phase which is not permitted.
+#[ic_cdk_macros::update]
+pub fn initialize_rng() {
+    // Schedule async init outside install mode
+    ic_cdk::spawn(rng::init_rng());
+}
+
+#[ic_cdk::query]
+pub fn rng_ready() -> bool {
+    rng::is_initialized()
 }
 
 // Removed duplicate verify_heir_secret, bind_heir_principal, list_audit_events definitions (already exposed above).
