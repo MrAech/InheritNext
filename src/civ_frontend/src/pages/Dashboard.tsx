@@ -143,7 +143,28 @@ const Dashboard = () => {
       clearInterval(interval);
       clearInterval(countdownInterval);
     };
-  }, [assets, toast]);
+  }, [assets, toast, timerStatusLabel]);
+
+  // Listen for demo timer-started events (distributions assignment) and refresh timer immediately
+  useEffect(() => {
+    const handler = () => {
+      // dynamic import to avoid top-level coupling
+      import('@/lib/api')
+        .then(async (api) => {
+          try {
+            const t = await api.timerStatus();
+            setTimeRemaining(t);
+            setTimerStatusLabel(t === 0 ? 'expired' : t === -1 ? 'not_started' : 'running');
+            setDistributionWarning(t === 0 ? 'Timer expired! Assets will be auto-distributed.' : null);
+          } catch (e) {
+            console.warn('[Dashboard] timer refresh after event failed', e);
+          }
+        })
+        .catch((e) => console.warn('[Dashboard] failed to import api for timer refresh', e));
+    };
+    window.addEventListener('inheritnext:timer-started', handler);
+    return () => window.removeEventListener('inheritnext:timer-started', handler);
+  }, []);
 
   const handleSignOut = async () => {
     await logout();
@@ -348,17 +369,56 @@ const Dashboard = () => {
                 size="sm"
                 onClick={() => {
                   setTimerLoading(true);
-                  import("@/lib/api").then(api =>
-                    api.timerStatus().then(timer => {
+                  import("@/lib/api").then(async api => {
+                    try {
+                      const timer = await api.timerStatus();
                       setTimeRemaining(timer);
+                    } finally {
                       setTimerLoading(false);
-                    }).catch(() => setTimerLoading(false))
-                  );
+                    }
+                  }).catch(() => setTimerLoading(false));
                 }}
                 className="ml-4"
                 disabled={timerLoading}
               >
                 Sync Timer
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={async () => {
+                  setTimerLoading(true);
+                  try {
+                    const api = await import('@/lib/api');
+                    const ok = await api.executeEstateNow();
+                    if (ok) {
+                      toast({ title: 'Estate Execution', description: 'Estate execution started (mock).', variant: 'default' });
+                      setTimerStatusLabel('expired');
+                      setTimeRemaining(0);
+                      try {
+                        // In demo mode, also generate a demo claim and surface the code to the user
+                        if (typeof (api as any).createDemoClaim === 'function' && heirs.length > 0 && assets.length > 0) {
+                          const code = (api as any).createDemoClaim(heirs[0].id, [assets[0].id]);
+                          if (code) {
+                            console.log('[Dashboard] Demo claim created by Execute Now:', code);
+                            toast({ title: 'Demo Claim Created', description: `Code: ${code}` });
+                          }
+                        }
+                      } catch (e) {
+                        console.warn('[Dashboard] createDemoClaim failed', e);
+                      }
+                    } else {
+                      toast({ title: 'Execution Failed', description: 'Failed to execute estate (mock).', variant: 'destructive' });
+                    }
+                  } catch (e) {
+                    toast({ title: 'Execution Error', description: String(e), variant: 'destructive' });
+                  } finally {
+                    setTimerLoading(false);
+                  }
+                }}
+                className="ml-2"
+              >
+                Execute Now
               </Button>
             </CardContent>
           </Card>
@@ -476,7 +536,7 @@ const Dashboard = () => {
 
         {/* Distributions Manager */}
         {assets.length > 0 && heirs.length > 0 && (
-          <div className="mb-8">
+          <div className="mt-8 mb-8">
             <DistributionsManager assets={assets} heirs={heirs} />
           </div>
         )}

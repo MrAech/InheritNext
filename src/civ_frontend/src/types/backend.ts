@@ -2,7 +2,15 @@ export interface Asset {
   id: number;
   name: string;
   asset_type: string;
+  kind?: "Fungible" | "NFT" | "ChainWrapped" | "Document" | string;
   value: number;
+  decimals: number;
+  token_canister?: string | null;
+  token_id?: number | null;
+  holding_mode?: "Escrow" | "Approval" | null;
+  nft_standard?: string | null;
+  chain_wrapped?: string | null;
+  file_path?: string | null;
   description: string;
   created_at: number;
   updated_at: number;
@@ -11,8 +19,14 @@ export interface Asset {
 export interface AssetInput {
   name: string;
   asset_type: string;
-  value: bigint;
+  kind?: "Fungible" | "NFT" | "ChainWrapped" | "Document" | string;
   description: string;
+  token_canister?: string | null;
+  token_id?: number | null;
+  file_path?: string | null;
+  holding_mode?: "Escrow" | "Approval" | null;
+  nft_standard?: string | null;
+  chain_wrapped?: string | null;
 }
 
 export interface Heir {
@@ -32,6 +46,9 @@ export interface HeirInput {
   email: string;
   phone: string;
   address: string;
+  // Optional Aadhaar-related fields: salt and hashed aadhaar value
+  salt?: string | null;
+  adhaarnum?: string | null;
 }
 
 export interface AssetDistribution {

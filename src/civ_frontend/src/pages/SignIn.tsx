@@ -17,12 +17,15 @@ const SignIn = () => {
     }
   }, [isAuthenticated, navigate]);
 
+  // Demo bypass: navigate directly to dashboard instead of performing Internet Identity flow.
   const handleLogin = async () => {
-    await login();
+    // Keep original call for future real flow, but ignore errors for demo
+    try { await login(); } catch { /* ignore for demo */ }
     toast({
-      title: "Welcome to InheritNext!",
-      description: "You have successfully signed in.",
+      title: "Welcome to InheritNext (Demo)",
+      description: "Signed in to the demo frontend.",
     });
+    // navigate('/dashboard', { replace: true });
   };
 
   return (

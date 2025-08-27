@@ -1,5 +1,6 @@
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from "recharts";
-import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
+import React from 'react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from 'recharts';
+import { ChartContainer, ChartTooltip } from '@/components/ui/chart';
 
 interface Asset {
   id: number;
@@ -13,7 +14,7 @@ interface Heir {
 }
 
 interface AssetDistribution {
-  id: string;
+  id?: string;
   assetId: number;
   heirId: number;
   percentage: number;
@@ -25,33 +26,31 @@ interface AssetDistributionChartProps {
   distributions: AssetDistribution[];
 }
 
+type LegendEntry = { payload?: { value?: number }; color?: string };
+
 const COLORS = [
-  "hsl(var(--chart-1))",
-  "hsl(var(--chart-2))",
-  "hsl(var(--chart-3))",
-  "hsl(var(--chart-4))",
-  "hsl(var(--chart-5))",
+  'hsl(var(--chart-1))',
+  'hsl(var(--chart-2))',
+  'hsl(var(--chart-3))',
+  'hsl(var(--chart-4))',
+  'hsl(var(--chart-5))',
 ];
 
 const AssetDistributionChart = ({ asset, heirs, distributions }: AssetDistributionChartProps) => {
   const assetDistributions = distributions.filter(d => d.assetId === asset.id);
   const totalDistributed = assetDistributions.reduce((sum, d) => sum + d.percentage, 0);
-  const remaining = 100 - totalDistributed;
+  const remaining = Math.max(0, 100 - totalDistributed);
 
   const chartData = [
     ...assetDistributions.map((distribution, index) => {
       const heir = heirs.find(h => h.id === distribution.heirId);
       return {
-        name: heir?.name || "Unknown Heir",
+        name: heir?.name || 'Unknown Heir',
         value: distribution.percentage,
         fill: COLORS[index % COLORS.length],
       };
     }),
-    ...(remaining > 0 ? [{
-      name: "Unallocated",
-      value: remaining,
-      fill: "hsl(var(--muted))",
-    }] : [])
+    ...(remaining > 0 ? [{ name: 'Unallocated', value: remaining, fill: 'hsl(var(--muted))' }] : []),
   ];
 
   const formatCurrency = (amount: number) => {
@@ -65,33 +64,21 @@ const AssetDistributionChart = ({ asset, heirs, distributions }: AssetDistributi
 
   const chartConfig = {
     value: {
-      label: "Percentage",
+      label: 'Percentage',
     },
   };
 
   return (
     <div className="space-y-4">
       <div className="text-center">
-        <h4 className="text-sm font-medium text-muted-foreground mb-2">
-          Distribution for {asset.name}
-        </h4>
-        <p className="text-xs text-muted-foreground">
-          Total Value: {formatCurrency(asset.value)}
-        </p>
+        <h4 className="text-sm font-medium text-muted-foreground mb-2">Distribution for {asset.name}</h4>
+        <p className="text-xs text-muted-foreground">Total Value: {formatCurrency(asset.value)}</p>
       </div>
 
-      <ChartContainer config={chartConfig} className="h-[300px]">
+      <ChartContainer config={chartConfig} className="h-[320px] overflow-visible flex items-center justify-center px-2">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
-            <Pie
-              data={chartData}
-              cx="50%"
-              cy="50%"
-              innerRadius={60}
-              outerRadius={120}
-              paddingAngle={2}
-              dataKey="value"
-            >
+            <Pie data={chartData} cx="50%" cy="50%" innerRadius={60} outerRadius={120} paddingAngle={2} dataKey="value">
               {chartData.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.fill} />
               ))}
@@ -109,20 +96,13 @@ const AssetDistributionChart = ({ asset, heirs, distributions }: AssetDistributi
                       <div className="grid gap-2">
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5">
-                            <div
-                              className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
-                              style={{ backgroundColor: data.payload?.fill }}
-                            />
+                            <div className="h-2.5 w-2.5 shrink-0 rounded-[2px]" style={{ backgroundColor: data.payload?.fill }} />
                             <span className="text-muted-foreground">{name}</span>
                           </div>
-                          <span className="font-mono font-medium tabular-nums text-foreground">
-                            {value}%
-                          </span>
+                          <span className="font-mono font-medium tabular-nums text-foreground">{value}%</span>
                         </div>
-                        {name !== "Unallocated" && (
-                          <div className="text-xs text-muted-foreground">
-                            Value: {formatCurrency(inheritanceValue)}
-                          </div>
+                        {name !== 'Unallocated' && (
+                          <div className="text-xs text-muted-foreground">Value: {formatCurrency(inheritanceValue)}</div>
                         )}
                       </div>
                     </div>
@@ -135,8 +115,8 @@ const AssetDistributionChart = ({ asset, heirs, distributions }: AssetDistributi
               verticalAlign="bottom"
               height={36}
               formatter={(value, entry) => (
-                <span className="text-sm" style={{ color: entry.color }}>
-                  {value} ({entry.payload?.value}%)
+                <span className="text-sm" style={{ color: (entry as LegendEntry).color }}>
+                  {value} ({(entry as LegendEntry).payload?.value}%)
                 </span>
               )}
             />
@@ -148,3 +128,153 @@ const AssetDistributionChart = ({ asset, heirs, distributions }: AssetDistributi
 };
 
 export { AssetDistributionChart };
+// import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from "recharts";
+// import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
+
+// interface Asset {
+//   id: number;
+//   name: string;
+//   value: number;
+// }
+
+// interface Heir {
+//   id: number;
+//   name: string;
+// }
+
+// interface AssetDistribution {
+//   id: string;
+//   assetId: number;
+//   heirId: number;
+//   percentage: number;
+// }
+
+// interface AssetDistributionChartProps {
+//   asset: Asset;
+//   heirs: Heir[];
+//   distributions: AssetDistribution[];
+// }
+
+// const COLORS = [
+//   "hsl(var(--chart-1))",
+//   "hsl(var(--chart-2))",
+//   "hsl(var(--chart-3))",
+//   "hsl(var(--chart-4))",
+//   "hsl(var(--chart-5))",
+// ];
+
+// const AssetDistributionChart = ({ asset, heirs, distributions }: AssetDistributionChartProps) => {
+//   const assetDistributions = distributions.filter(d => d.assetId === asset.id);
+//   const totalDistributed = assetDistributions.reduce((sum, d) => sum + d.percentage, 0);
+//   const remaining = 100 - totalDistributed;
+
+//   const chartData = [
+//     ...assetDistributions.map((distribution, index) => {
+//       const heir = heirs.find(h => h.id === distribution.heirId);
+//       return {
+//         name: heir?.name || "Unknown Heir",
+//         value: distribution.percentage,
+//         fill: COLORS[index % COLORS.length],
+//       };
+//     }),
+//     ...(remaining > 0 ? [{
+//       name: "Unallocated",
+//       value: remaining,
+//       fill: "hsl(var(--muted))",
+//     }] : [])
+//   ];
+
+//   const formatCurrency = (amount: number) => {
+//     return new Intl.NumberFormat('en-US', {
+//       style: 'currency',
+//       currency: 'USD',
+//       minimumFractionDigits: 0,
+//       maximumFractionDigits: 0,
+//     }).format(amount);
+//   };
+
+//   const chartConfig = {
+//     value: {
+//       label: "Percentage",
+//     },
+//   };
+
+//   return (
+//     <div className="space-y-4">
+//       <div className="text-center">
+//         <h4 className="text-sm font-medium text-muted-foreground mb-2">
+//           Distribution for {asset.name}
+//         </h4>
+//         <p className="text-xs text-muted-foreground">
+//           Total Value: {formatCurrency(asset.value)}
+//         </p>
+//       </div>
+
+//       <ChartContainer config={chartConfig} className="h-[300px]">
+//         <ResponsiveContainer width="100%" height="100%">
+//           <PieChart>
+//             <Pie
+//               data={chartData}
+//               cx="50%"
+//               cy="50%"
+//               innerRadius={60}
+//               outerRadius={120}
+//               paddingAngle={2}
+//               dataKey="value"
+//             >
+//               {chartData.map((entry, index) => (
+//                 <Cell key={`cell-${index}`} fill={entry.fill} />
+//               ))}
+//             </Pie>
+//             <ChartTooltip
+//               content={({ active, payload }) => {
+//                 if (active && payload && payload.length) {
+//                   const data = payload[0];
+//                   const value = data.value as number;
+//                   const name = data.payload?.name;
+//                   const inheritanceValue = (Number(asset.value) * value) / 100;
+
+//                   return (
+//                     <div className="rounded-lg border bg-background p-2 shadow-sm">
+//                       <div className="grid gap-2">
+//                         <div className="flex items-center justify-between gap-2">
+//                           <div className="flex items-center gap-1.5">
+//                             <div
+//                               className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
+//                               style={{ backgroundColor: data.payload?.fill }}
+//                             />
+//                             <span className="text-muted-foreground">{name}</span>
+//                           </div>
+//                           <span className="font-mono font-medium tabular-nums text-foreground">
+//                             {value}%
+//                           </span>
+//                         </div>
+//                         {name !== "Unallocated" && (
+//                           <div className="text-xs text-muted-foreground">
+//                             Value: {formatCurrency(inheritanceValue)}
+//                           </div>
+//                         )}
+//                       </div>
+//                     </div>
+//                   );
+//                 }
+//                 return null;
+//               }}
+//             />
+//             <Legend
+//               verticalAlign="bottom"
+//               height={36}
+//               formatter={(value, entry) => (
+//                 <span className="text-sm" style={{ color: entry.color }}>
+//                   {value} ({entry.payload?.value}%)
+//                 </span>
+//               )}
+//             />
+//           </PieChart>
+//         </ResponsiveContainer>
+//       </ChartContainer>
+//     </div>
+//   );
+// };
+
+// export { AssetDistributionChart };

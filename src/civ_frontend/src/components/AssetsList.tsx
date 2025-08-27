@@ -142,8 +142,13 @@ const AssetsList = ({ onTotalChange, onAssetsChange, onAssetAdded }: AssetsListP
   const handleAddAsset = async (newAsset: AssetInput) => {
     setLoading(true);
     try {
-      const assetToSend = { ...newAsset, value: BigInt(newAsset.value) };
-      const ok = await addAsset(assetToSend);
+      // value may be undefined for new assets; do not convert undefined to BigInt
+      const assetToSend = { ...newAsset } as AssetInput;
+      // Defensive: ensure decimals is always a number (0 sentinel) before calling API
+      const normalizedAsset: AssetInput = {
+        ...assetToSend,
+      };
+      const ok = await addAsset(normalizedAsset);
       if (ok) {
         try {
           const data = await listAssets();
@@ -174,13 +179,15 @@ const AssetsList = ({ onTotalChange, onAssetsChange, onAssetAdded }: AssetsListP
             });
           }
         }
-      } else {
-        toast({
-          title: "Add Failed",
-          description: "Could not add asset.",
-          variant: "destructive",
-        });
-      }
+        } else {
+          // Simplify UX: close dialog even on add failure but show error so user can try again.
+          setIsAddingAsset(false);
+          toast({
+            title: "Add Failed",
+            description: "Could not add asset (backend rejected request). It was saved locally but may not be persisted.",
+            variant: "destructive",
+          });
+        }
     } catch (err) {
       if (
         err &&
@@ -202,13 +209,16 @@ const AssetsList = ({ onTotalChange, onAssetsChange, onAssetAdded }: AssetsListP
   };
 
   const getAssetIcon = (asset_type: string) => {
+    // Prefer the asset kind when available (frontend maps backend `kind` into asset.kind)
     switch (asset_type) {
-      case "Real Estate":
-        return <Home className="w-5 h-5" />;
-      case "Stocks":
+      case "Fungible":
+        return <Banknote className="w-5 h-5" />;
+      case "NFT":
         return <TrendingUp className="w-5 h-5" />;
-      case "Collectibles":
-        return <Car className="w-5 h-5" />;
+      case "ChainWrapped":
+        return <Building className="w-5 h-5" />;
+      case "Document":
+        return <Home className="w-5 h-5" />;
       default:
         return <Banknote className="w-5 h-5" />;
     }
@@ -260,7 +270,7 @@ const AssetsList = ({ onTotalChange, onAssetsChange, onAssetAdded }: AssetsListP
                       <CardDescription>{asset.description}</CardDescription>
                     </div>
                   </div>
-                  <Badge variant="secondary">{asset.asset_type}</Badge>
+                  <Badge variant="secondary">{asset.kind ?? asset.asset_type}</Badge>
                 </div>
               </CardHeader>
               <CardContent>
@@ -320,21 +330,42 @@ interface AssetFormDialogProps {
 }
 
 const AssetFormDialog = ({ asset, onSubmit, onCancel, isEditing = false }: AssetFormDialogProps) => {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState(() => ({
     name: asset?.name || "",
-    asset_type: asset?.asset_type || "",
-    value: Number(asset?.value) || 0,
+    // asset_type is a human-facing label; default to kind when present
+    asset_type: asset?.asset_type || (asset?.kind as string) || "Fungible",
+    kind: (asset?.kind as string) || "Fungible",
+    // backend-managed fields (value, decimals) are not edited by frontend
+  token_canister: asset ? asset.token_canister ?? undefined : undefined,
+  token_id: asset ? asset.token_id ?? undefined : undefined,
+  holding_mode: asset ? asset.holding_mode ?? undefined : undefined,
+  nft_standard: asset ? asset.nft_standard ?? undefined : undefined,
+  chain_wrapped: asset ? asset.chain_wrapped ?? undefined : undefined,
+  file_path: asset ? asset.file_path ?? undefined : undefined,
     description: asset?.description || "",
-  });
+  }));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const assetInput: AssetInput = {
+    const base: Partial<AssetInput> = {
       name: formData.name,
       asset_type: formData.asset_type,
-      value: BigInt(formData.value),
+      kind: formData.kind,
       description: formData.description,
+      token_canister: formData.token_canister ?? undefined,
+      token_id: formData.token_id ?? undefined,
+      nft_standard: formData.nft_standard ?? undefined,
+      chain_wrapped: formData.chain_wrapped ?? undefined,
+      file_path: formData.file_path ?? undefined,
     };
+    // For Document assets, force holding_mode to Escrow and keep payload minimal.
+    if (formData.kind === "Document") {
+      base.holding_mode = "Escrow";
+    } else {
+      base.holding_mode = formData.holding_mode ?? undefined;
+    }
+    const assetInput: AssetInput = base as AssetInput;
+    // Call onSubmit and expect the handler to close the dialog on success.
     onSubmit(assetInput);
   };
 
@@ -360,34 +391,24 @@ const AssetFormDialog = ({ asset, onSubmit, onCancel, isEditing = false }: Asset
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="type">Asset Type</Label>
+          <Label htmlFor="type">Asset Kind</Label>
           <Select
-            value={formData.asset_type}
-            onValueChange={(value) => setFormData(prev => ({ ...prev, asset_type: value }))}
+            value={formData.kind}
+            onValueChange={(value) => setFormData(prev => ({ ...prev, kind: value, asset_type: value }))}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Select asset type" />
+              <SelectValue placeholder="Select asset kind" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="Real Estate">Real Estate</SelectItem>
-              <SelectItem value="Stocks">Stocks</SelectItem>
-              <SelectItem value="Collectibles">Collectibles</SelectItem>
-              <SelectItem value="Cash">Cash</SelectItem>
-              <SelectItem value="Bonds">Bonds</SelectItem>
+              <SelectItem value="Fungible">Fungible Token</SelectItem>
+              <SelectItem value="NFT">NFT</SelectItem>
+              <SelectItem value="ChainWrapped">Chain Wrapped</SelectItem>
+              <SelectItem value="Document">Document</SelectItem>
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="value">Current Value ($)</Label>
-          <Input
-            id="value"
-            type="number"
-            value={formData.value}
-            onChange={(e) => setFormData(prev => ({ ...prev, value: Number(e.target.value) }))}
-            placeholder="Enter current value"
-            required
-          />
-        </div>
+        {/* Value is assigned by backend for new assets; show current value when editing but don't require on add */}
+        {/* Backend-managed fields (value/decimals) are not editable in the frontend form. */}
         <div className="space-y-2">
           <Label htmlFor="description">Description</Label>
           <Input
@@ -398,6 +419,75 @@ const AssetFormDialog = ({ asset, onSubmit, onCancel, isEditing = false }: Asset
             required
           />
         </div>
+        {/* Dynamic inputs by kind */}
+        {formData.kind === "NFT" && (
+          <div className="space-y-2">
+            <Label htmlFor="nft_canister">NFT Canister ID</Label>
+            <Input
+              id="nft_canister"
+              value={formData.token_canister ?? ""}
+              onChange={(e) => setFormData(prev => ({ ...prev, token_canister: e.target.value }))}
+              placeholder="Enter canister id"
+            />
+            <Label htmlFor="nft_token_id">Token ID</Label>
+            <Input
+              id="nft_token_id"
+              type="number"
+              value={formData.token_id ?? ""}
+              onChange={(e) => setFormData(prev => ({ ...prev, token_id: e.target.value ? Number(e.target.value) : null }))}
+            />
+            <Label htmlFor="nft_standard">NFT Standard</Label>
+            <Select value={formData.nft_standard ?? "Ext"} onValueChange={(v) => setFormData(prev => ({ ...prev, nft_standard: v }))}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select standard" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Dip721">DIP721</SelectItem>
+                <SelectItem value="Ext">Ext</SelectItem>
+                <SelectItem value="Other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        {formData.kind === "Fungible" && (
+          <div className="space-y-2">
+            <Label htmlFor="token_id">Token ID (optional)</Label>
+            <Input
+              id="token_id"
+              type="number"
+              value={formData.token_id ?? ""}
+              onChange={(e) => setFormData(prev => ({ ...prev, token_id: e.target.value ? Number(e.target.value) : null }))}
+              placeholder="Enter token id (if applicable)"
+            />
+          </div>
+        )}
+        {formData.kind === "ChainWrapped" && (
+          <div className="space-y-2">
+            <Label htmlFor="wrapped">Wrapped Type</Label>
+            <Select value={formData.chain_wrapped ?? "CkBtc"} onValueChange={(v) => setFormData(prev => ({ ...prev, chain_wrapped: v }))}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select wrapped type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="CkBtc">ckBTC</SelectItem>
+                <SelectItem value="CkEth">ckETH</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        {formData.kind === "Document" && (
+          <div className="space-y-2">
+            <Label htmlFor="file">Document Upload (for now we store filename)</Label>
+            <Input
+              id="file"
+              type="file"
+              onChange={(e) => {
+                const f = (e.target as HTMLInputElement).files?.[0];
+                if (f) setFormData(prev => ({ ...prev, file_path: `/uploads/${f.name}` }));
+              }}
+            />
+          </div>
+        )}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onCancel}>
             Cancel

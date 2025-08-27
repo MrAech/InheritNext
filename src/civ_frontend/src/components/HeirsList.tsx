@@ -274,21 +274,56 @@ interface HeirFormDialogProps {
 }
 
 const HeirFormDialog = ({ heir, onSubmit, onCancel, isEditing = false }: HeirFormDialogProps) => {
-  const [formData, setFormData] = useState({
+  type HeirFormState = {
+    name: string;
+    relationship: string;
+    email: string;
+    phone: string;
+    address: string;
+    aadhaar: string;
+  };
+
+  const [formData, setFormData] = useState<HeirFormState>({
     name: heir?.name || "",
     relationship: heir?.relationship || "",
     email: heir?.email || "",
     phone: heir?.phone || "",
     address: heir?.address || "",
+    aadhaar: "", // raw input local-only; will only send hashed form
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (isEditing && heir) {
-      onSubmit({ ...heir, ...formData });
-    } else {
-      onSubmit(formData);
-    }
+    (async () => {
+      if (isEditing && heir) {
+        onSubmit({ ...heir, ...formData });
+        return;
+      }
+      // For new heirs: if aadhaar provided, generate salt and hash
+  const rawAadhaar = formData.aadhaar;
+      let salt: string | null = null;
+      let hashed: string | null = null;
+      if (rawAadhaar && typeof rawAadhaar === 'string' && rawAadhaar.trim().length > 0) {
+        // generate random 16-byte salt, hex encoded
+        const saltBytes = crypto.getRandomValues(new Uint8Array(16));
+        salt = Array.from(saltBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+        // compute sha256(salt + aadhaar)
+        const encoder = new TextEncoder();
+        const data = encoder.encode(salt + rawAadhaar.trim());
+        const digest = await crypto.subtle.digest('SHA-256', data);
+        hashed = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+      }
+      const payload: HeirInput = {
+        name: formData.name,
+        relationship: formData.relationship,
+        email: formData.email,
+        phone: formData.phone,
+        address: formData.address,
+        salt: salt ?? undefined,
+        adhaarnum: hashed ?? undefined,
+      };
+      onSubmit(payload);
+    })();
   };
 
   return (
@@ -351,6 +386,16 @@ const HeirFormDialog = ({ heir, onSubmit, onCancel, isEditing = false }: HeirFor
             placeholder="e.g., Son, Daughter, Spouse, Charity"
             required
           />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="aadhaar">Aadhaar Number (optional)</Label>
+          <Input
+            id="aadhaar"
+            value={formData.aadhaar}
+            onChange={(e) => setFormData(prev => ({ ...prev, aadhaar: e.target.value }))}
+            placeholder="Enter Aadhaar number (will be hashed)"
+          />
+          <div className="text-xs text-muted-foreground">If provided, the Aadhaar will be salted & hashed in your browser; raw value is not sent to the server.</div>
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onCancel}>

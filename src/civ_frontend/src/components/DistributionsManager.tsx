@@ -1,319 +1,221 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { Share2, Plus, Trash2 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { AssetDistributionChart } from "@/components/AssetDistributionChart";
-import { getAssetDistributions, setAssetDistributions } from "@/lib/distribution";
+import React, { useEffect, useMemo, useState } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { assignDistributions, listDistributions } from '@/lib/api';
+import { AssetDistributionChart } from './AssetDistributionChart';
+import type { AssetDistribution as BackendDistribution } from '@/types/backend';
+import { useToast } from '@/hooks/use-toast';
 
-type Asset = { id: number; name: string; value: number };
+type Asset = { id: number; name: string; value?: number };
 type Heir = { id: number; name: string };
 
-type Row = { heirId: number; percentage: number };
-
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
-function AssetEditor({ asset, heirs }: { asset: Asset; heirs: Heir[] }) {
-  const { toast } = useToast();
-  const [rows, setRows] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [newHeirId, setNewHeirId] = useState<string>("");
-  const [newPct, setNewPct] = useState<string>("");
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      console.debug("[Dist] load", { assetId: asset.id });
-      const list = await getAssetDistributions(asset.id);
-      const mapped = list.map(d => ({ heirId: d.heir_id, percentage: d.percentage }));
-      console.debug("[Dist] load ->", mapped);
-      setRows(mapped);
-    } finally {
-      setLoading(false);
-    }
-  }, [asset.id]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const total = useMemo(() => rows.reduce((s, r) => s + r.percentage, 0), [rows]);
-
-  const addRow = async () => {
-    const pct = Number(newPct);
-    const heirId = Number(newHeirId);
-    if (!heirId || !pct || pct <= 0) {
-      toast({ title: "Invalid input", description: "Pick an heir and a valid percentage.", variant: "destructive" });
-      return;
-    }
-    if (rows.some(r => r.heirId === heirId)) {
-      toast({ title: "Duplicate heir", description: "This heir already has a share.", variant: "destructive" });
-      return;
-    }
-    if (total + pct > 100) {
-      toast({ title: "Exceeded 100%", description: `Remaining ${100 - total}%`, variant: "destructive" });
-      return;
-    }
-    const next = [...rows, { heirId, percentage: pct }];
-    console.debug("[Dist] addRow -> persist", { assetId: asset.id, next });
-    setSaving(true);
-    try {
-      const ok = await setAssetDistributions(asset.id, next.map(r => ({ asset_id: asset.id, heir_id: r.heirId, percentage: r.percentage })));
-      console.debug("[Dist] addRow result", { ok });
-      if (ok) {
-        setRows(next);
-        setNewHeirId("");
-        setNewPct("");
-        toast({ title: "Saved", description: `Added heir to ${asset.name}.` });
-      } else {
-        toast({ title: "Save failed", description: `Failed to add for ${asset.name}.`, variant: "destructive" });
-      }
-    } catch (e) {
-      console.error("[Dist] addRow error", e);
-      toast({ title: "Save error", description: String(e), variant: "destructive" });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const removeRow = async (heirId: number) => {
-    const next = rows.filter(r => r.heirId !== heirId);
-    console.debug("[Dist] removeRow -> persist", { assetId: asset.id, heirId, next });
-    setSaving(true);
-    try {
-      const ok = await setAssetDistributions(asset.id, next.map(r => ({ asset_id: asset.id, heir_id: r.heirId, percentage: r.percentage })));
-      console.debug("[Dist] removeRow result", { ok });
-      if (ok) {
-        setRows(next);
-        toast({ title: "Removed", description: `Removed heir from ${asset.name}.` });
-      } else {
-        toast({ title: "Remove failed", description: `Failed to remove for ${asset.name}.`, variant: "destructive" });
-      }
-    } catch (e) {
-      console.error("[Dist] removeRow error", e);
-      toast({ title: "Remove error", description: String(e), variant: "destructive" });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const updatePctLocal = (heirId: number, pct: number) => setRows(rows.map(r => r.heirId === heirId ? { ...r, percentage: pct } : r));
-
-  const persistPct = async (heirId: number) => {
-    const target = rows.find(r => r.heirId === heirId);
-    if (!target) return;
-    const othersTotal = rows.filter(r => r.heirId !== heirId).reduce((s, r) => s + r.percentage, 0);
-    if (othersTotal + target.percentage > 100) {
-      toast({ title: "Exceeded 100%", description: `Remaining ${100 - othersTotal}%`, variant: "destructive" });
-      return;
-    }
-    const next = [...rows];
-    console.debug("[Dist] persistPct -> persist", { assetId: asset.id, heirId, next });
-    setSaving(true);
-    try {
-      const ok = await setAssetDistributions(asset.id, next.map(r => ({ asset_id: asset.id, heir_id: r.heirId, percentage: r.percentage })));
-      console.debug("[Dist] persistPct result", { ok });
-      if (!ok) {
-        toast({ title: "Save failed", description: `Failed to update ${asset.name}.`, variant: "destructive" });
-      }
-    } catch (e) {
-      console.error("[Dist] persistPct error", e);
-      toast({ title: "Save error", description: String(e), variant: "destructive" });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const save = async () => {
-    if (rows.length === 0) {
-      toast({ title: "Nothing to save", description: "Add at least one row.", variant: "destructive" });
-      return;
-    }
-    if (total !== 100) {
-      toast({ title: "Must total 100%", description: `Currently ${total}%`, variant: "destructive" });
-      return;
-    }
-    setSaving(true);
-    try {
-      const ok = await setAssetDistributions(asset.id, rows.map(r => ({ asset_id: asset.id, heir_id: r.heirId, percentage: r.percentage })));
-      if (ok) {
-        toast({ title: "Saved", description: `Saved distributions for ${asset.name}.` });
-        await load();
-      } else {
-        toast({ title: "Save failed", description: `Failed to save for ${asset.name}.`, variant: "destructive" });
-      }
-    } catch (e) {
-      toast({ title: "Save error", description: String(e), variant: "destructive" });
-    } finally {
-      setSaving(false);
-    }
-  };
-
+function Pie({ data }: { data: { label: string; value: number; color?: string }[] }) {
+  const total = data.reduce((s, d) => s + Math.max(0, d.value), 0) || 1;
+  let angle = 0;
+  const slices = data.map((d, i) => {
+    const start = angle;
+    const portion = (d.value / total) * 360;
+    const end = start + portion;
+    angle = end;
+    const large = portion > 180 ? 1 : 0;
+    // polar to cartesian
+    const r = 80;
+    const cx = 100;
+    const cy = 100;
+    const startRad = (start - 90) * (Math.PI / 180);
+    const endRad = (end - 90) * (Math.PI / 180);
+    const x1 = cx + r * Math.cos(startRad);
+    const y1 = cy + r * Math.sin(startRad);
+    const x2 = cx + r * Math.cos(endRad);
+    const y2 = cy + r * Math.sin(endRad);
+    const dPath = `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`;
+    return { d: dPath, color: d.color ?? (`hsl(${(i * 73) % 360} 70% 50%)`), label: d.label, value: d.value };
+  });
   return (
-    <Card className="shadow-card">
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="text-lg">{asset.name}</CardTitle>
-            <CardDescription>Total Value: {formatCurrency(asset.value)}</CardDescription>
-          </div>
-          <Badge variant={total === 100 ? "secondary" : "destructive"}>{total}% Distributed</Badge>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="grid lg:grid-cols-2 gap-6">
-          <div>
-            {loading ? (
-              <div className="text-muted-foreground">Loading...</div>
-            ) : rows.length ? (
-              <div className="space-y-3">
-                {rows.map(r => {
-                  const heir = heirs.find(h => h.id === r.heirId);
-                  const inheritanceValue = (Number(asset.value) * r.percentage) / 100;
-                  return (
-                    <div key={r.heirId} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <Share2 className="w-4 h-4 text-primary" />
-                        <div>
-                          <p className="font-medium">{heir?.name}</p>
-                          <p className="text-sm text-muted-foreground">{r.percentage}% • {formatCurrency(inheritanceValue)}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Input type="number" value={r.percentage} min={0} max={100} className="w-20"
-                          disabled={saving}
-                          onChange={(e) => updatePctLocal(r.heirId, Number(e.target.value))}
-                          onBlur={() => void persistPct(r.heirId)} />
-                        <Button variant="outline" size="sm" disabled={saving} className="text-destructive hover:bg-destructive hover:text-destructive-foreground" onClick={() => void removeRow(r.heirId)}>
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
-                {total < 100 && (
-                  <div className="text-center py-2">
-                    <Separator className="mb-2" />
-                    <p className="text-sm text-muted-foreground">{100 - total}% remaining to be distributed</p>
-                  </div>
-                )}
-                {/* Removed explicit Save button; changes persist immediately */}
-              </div>
-            ) : (
-              <div className="text-center py-6 text-muted-foreground">
-                <Share2 className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p>No distributions set for this asset</p>
-                <p className="text-sm">Use the form below to get started</p>
-              </div>
-            )}
-            <div className="mt-4 grid grid-cols-3 gap-2 items-end">
-              <div className="col-span-2">
-                <Label>Heir</Label>
-                <Select value={newHeirId} onValueChange={setNewHeirId} disabled={saving}>
-                  <SelectTrigger><SelectValue placeholder="Choose an heir" /></SelectTrigger>
-                  <SelectContent>
-                    {heirs.filter(h => !rows.some(r => r.heirId === h.id)).map(h => (
-                      <SelectItem key={h.id} value={String(h.id)}>{h.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Percentage %</Label>
-                <Input type="number" value={newPct} min={0} max={100} onChange={e => setNewPct(e.target.value)} placeholder="%" disabled={saving} />
-              </div>
-              <div className="col-span-3 flex justify-end">
-                <Button size="sm" className="bg-gradient-success" onClick={() => void addRow()} disabled={saving}>
-                  <Plus className="w-4 h-4 mr-2" /> Add
-                </Button>
-              </div>
-            </div>
-          </div>
-          <div>
-            <AssetDistributionChart asset={asset} heirs={heirs} distributions={rows.map(r => ({ id: `${asset.id}-${r.heirId}`, assetId: asset.id, heirId: r.heirId, percentage: r.percentage }))} />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <svg width={200} height={200} viewBox="0 0 200 200" aria-hidden>
+      {slices.map((s, i) => (
+        <path key={i} d={s.d} fill={s.color} stroke="#fff" strokeWidth={1} />
+      ))}
+      <circle cx={100} cy={100} r={36} fill="#fff" />
+    </svg>
   );
 }
 
-function DistributionsOverview({ assets, heirs }: { assets: Asset[]; heirs: Heir[] }) {
-  const [data, setData] = useState<Record<number, Row[]>>({});
-  const [loading, setLoading] = useState(true);
+type AssetDistribution = { assetId: number; heirId: number; percentage: number };
+type DistributionItem = { assetId: number; heirId: number; percentage: number };
+
+export default function DistributionsManager({ assets, heirs }: { assets: Asset[]; heirs: Heir[] }) {
+  const [selectedAsset, setSelectedAsset] = useState<number | null>(assets[0]?.id ?? null);
+  const [entries, setEntries] = useState<Record<number, number>>(() => ({}));
+  const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      const map: Record<number, Row[]> = {};
-      for (const a of assets) {
-        const d = await getAssetDistributions(a.id);
-        map[a.id] = d.map(x => ({ heirId: x.heir_id, percentage: x.percentage }));
-      }
-      setData(map);
-      setLoading(false);
-    })();
+    setSelectedAsset(assets[0]?.id ?? null);
   }, [assets]);
 
-  if (loading) return null;
+  // Load distributions from backend/mock store and prefill entries for selected asset
+  useEffect(() => {
+    let mounted = true;
+    async function load() {
+      if (!selectedAsset) return;
+      setLoading(true);
+      try {
+        const all = await listDistributions();
+        // Filter for selected asset
+        const forAsset = all.filter(d => Number(d.asset_id) === selectedAsset);
+        const map: Record<number, number> = {};
+        for (const h of heirs) map[h.id] = 0;
+        for (const d of forAsset) {
+          map[Number(d.heir_id)] = Number(d.percentage);
+        }
+        if (mounted) setEntries(map);
+      } catch (e) {
+        console.warn('Failed to load distributions', e);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+    void load();
+    return () => { mounted = false; };
+  }, [selectedAsset, heirs]);
+
+  const total = useMemo(() => Object.values(entries).reduce((s, v) => s + Number(v || 0), 0), [entries]);
+
+  const [allDistributions, setAllDistributions] = useState<DistributionItem[]>([]);
+  const pieData = heirs.map((h, idx) => ({ label: h.name, value: entries[h.id] ?? 0 }));
+
+  useEffect(() => {
+    let mounted = true;
+    async function loadAll() {
+      try {
+        const all = await listDistributions();
+        if (mounted) setAllDistributions(all.map(d => ({ assetId: Number(d.asset_id), heirId: Number(d.heir_id), percentage: Number(d.percentage) })));
+      } catch (e) {
+        console.warn('Failed to load all distributions', e);
+      }
+    }
+    void loadAll();
+    return () => { mounted = false; };
+  }, []);
+
+  const save = async () => {
+    if (!selectedAsset) return;
+    if (total !== 100) {
+      toast({ title: 'Invalid', description: 'Percentages must total 100%', variant: 'destructive' });
+      return;
+    }
+    setSaving(true);
+    try {
+      // Only send distributions for the selected asset
+      const dists: BackendDistribution[] = heirs.map(h => ({ asset_id: selectedAsset!, heir_id: h.id, percentage: Number(entries[h.id] || 0) }));
+      const ok = await assignDistributions(dists);
+      if (ok) {
+        toast({ title: 'Saved', description: 'Distributions saved' });
+        try {
+          // In demo/mock mode, ensure the inheritance timer starts when distributions are assigned.
+          // Use dynamic import to avoid top-level coupling and keep behavior demo-only.
+          const api = await import('@/lib/api');
+          if (typeof (api as any).resetTimer === 'function') {
+            const started = await (api as any).resetTimer();
+          if (started) {
+            toast({ title: 'Timer Started', description: 'Inheritance timer started (demo).' });
+            try {
+              // notify dashboard to refresh timer display
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (window as any).dispatchEvent(new CustomEvent('inheritnext:timer-started'));
+            } catch (e) {
+              console.warn('[DistributionsManager] dispatch timer-started event failed', e);
+            }
+          }
+          }
+        } catch (e) {
+          console.warn('[DistributionsManager] resetTimer failed', e);
+        }
+      } else {
+        toast({ title: 'Failed', description: 'Assign failed', variant: 'destructive' });
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
-    <Card className="shadow-card">
-      <CardHeader>
-        <CardTitle>All Distributions</CardTitle>
-        <CardDescription>Overview across all assets</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {assets.map(a => {
-          const rows = data[a.id] || [];
-          const total = rows.reduce((s, r) => s + r.percentage, 0);
-          return (
-            <div key={a.id} className="p-4 border rounded-lg">
-              <div className="flex items-center justify-between mb-2">
-                <div className="font-medium">{a.name}</div>
-                <Badge variant={total === 100 ? "secondary" : "destructive"}>{total}%</Badge>
-              </div>
-              {rows.length ? rows.map(r => {
-                const heir = heirs.find(h => h.id === r.heirId);
-                return (
-                  <div key={`${a.id}-${r.heirId}`} className="flex justify-between text-sm py-1">
-                    <span>{heir?.name || `Heir #${r.heirId}`}</span>
-                    <span>{r.percentage}%</span>
-                  </div>
-                );
-              }) : (
-                <div className="text-sm text-muted-foreground">No distributions</div>
-              )}
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <Card>
+        <CardContent>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Select asset</label>
+              <select
+                value={selectedAsset ?? ''}
+                onChange={(e) => setSelectedAsset(Number(e.target.value))}
+                className="w-full border rounded p-2 bg-black text-white"
+                style={{ appearance: 'none' }}
+              >
+                {assets.map(a => (
+                  <option key={a.id} value={a.id} className="bg-black text-white">{a.name}</option>
+                ))}
+              </select>
             </div>
-          );
-        })}
-      </CardContent>
-    </Card>
-  );
-}
-
-export function DistributionsManager({ assets, heirs }: { assets: Asset[]; heirs: Heir[] }) {
-  return (
-    <div className="space-y-6">
-      <div className="grid gap-4">
-        {assets.map(a => (
-          <AssetEditor key={a.id} asset={a} heirs={heirs} />
-        ))}
-      </div>
-      <DistributionsOverview assets={assets} heirs={heirs} />
+            <div>
+              <h3 className="font-medium mb-2">Assign percentages to heirs</h3>
+              <div className="space-y-2">
+                {heirs.map(h => (
+                  <div key={h.id} className="flex items-center gap-2">
+                    <div className="w-32">{h.name}</div>
+                    <Input className="w-24" type="number" min={0} max={100} value={entries[h.id] ?? ''} onChange={(e) => setEntries(prev => ({ ...prev, [h.id]: Number(e.target.value) }))} />
+                    <div className="text-sm text-muted-foreground">%</div>
+                    <div className="ml-2 text-xs text-muted-foreground">{entries[h.id] ?? 0}%</div>
+                  </div>
+                ))}
+                <div className="text-sm">Total: <strong>{total}%</strong></div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button onClick={() => void save()} disabled={saving}>{saving ? 'Saving...' : 'Save distributions'}</Button>
+              <Button variant="ghost" onClick={() => setEntries({})}>Reset</Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent>
+          <div className="flex flex-col items-stretch gap-4">
+            <div>
+              <h3 className="font-medium mb-2">Preview</h3>
+              <div className="text-sm text-muted-foreground mb-2">Per-heir breakdown for the selected asset</div>
+            </div>
+            <div className="md:flex md:items-start md:gap-8">
+              <div className="md:flex-1 pr-6">
+                <div className="space-y-3">
+                  {heirs.map((h, i) => (
+                    <div key={h.id} className="flex justify-between items-center text-sm py-2">
+                      <div className="flex items-center gap-3"><span className="inline-block w-3 h-3 rounded-full" style={{ background: `hsl(${(i * 73) % 360} 70% 50%)` }} />{h.name}</div>
+                      <div className="font-medium">{entries[h.id] ?? 0}%</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* vertical divider */}
+              <div className="hidden md:block w-px bg-border mx-2 h-auto" style={{ alignSelf: 'stretch' }} />
+              <div className="md:w-64 md:flex-shrink-0 mt-4 md:mt-0 flex justify-center">
+                <div className="w-full max-w-[280px] overflow-visible flex justify-center items-center">
+                  {selectedAsset && (() => {
+                    const found = assets.find(a => a.id === selectedAsset);
+                    const selected = found ? { id: found.id, name: found.name, value: found.value ?? 0 } : { id: selectedAsset, name: 'Asset', value: 0 };
+                    return <div className="-mx-4">{/* negative margin to ensure pie isn't clipped */}
+                      <AssetDistributionChart asset={selected} heirs={heirs} distributions={allDistributions} />
+                    </div>;
+                  })()}
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
-
-export default DistributionsManager;
