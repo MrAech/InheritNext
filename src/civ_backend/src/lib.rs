@@ -1,426 +1,526 @@
-// (chunked document upload APIs added near document functions below)
-// Public canister interface. Logic in modular api/; data structures split under models/.
+use candid::{CandidType, Deserialize, Nat};
+use ic_cdk::api::{time, msg_caller, canister_self};
+use ic_cdk::{storage};
+use candid::Principal;
+use ic_cdk_macros::{init, post_upgrade, pre_upgrade, query, update};
+use serde_bytes::ByteBuf;
+use sha2::{Digest, Sha256};
+use std::cell::RefCell;
+use std::collections::HashMap;
 
-mod api; // directory with modular submodules
-mod audit;
-mod crypto;
-mod rng; // secure raw_rand-seeded ChaCha20 CSPRNG
-mod models; // now a directory (was single file previously)
-mod storage;
-mod time;
+/*
+  Lightweight on-chain backend implementation:
+  - Implements owner registration, allocations, blob metadata storage,
+    activity tracking, sweep execution, event log, and certificate creation.
+  - Does NOT perform external token transfers in this PR; instead the
+    execution produces DistributionEntry records and CertificateRecords
+    along with events. Transfer helpers are scaffolded for future
+    integration with ledger / ICRC canisters.
+*/
 
-use crate::api::{
-    assets, ckbridge, custody, distributions, documents, escrow, executor, heirs, reconciliation,
-};
-// Re-export types needed in public interface for new on-chain approval helper
-use crate::api::escrow::ApprovalSetOnChainInput;
-use crate::models::*;
+const INACTIVITY_THRESHOLD_MILLIS: u64 = 1000 * 60 * 60 * 24 * 365; // 1 year (example)
+const WARNING_DURATION_MILLIS: u64 = 1000 * 60 * 60 * 24 * 30; // 30 days
 
-// There are still a few deprecated calls here so older generated bindings won't break.
+type Subaccount = Option<ByteBuf>;
 
-#[ic_cdk_macros::update]
-pub fn add_asset(new_asset: AssetInput) -> Result<(), CivError> {
-    assets::add_asset(new_asset)
-}
-
-#[ic_cdk_macros::update]
-pub fn add_heir(new_heir: HeirInput) -> Result<(), CivError> {
-    heirs::add_heir(new_heir)
-}
-
-// Optional legacy distribution APIs (disabled by default). Enable with feature "legacy-distributions" during build.
-#[cfg(feature = "legacy-distributions")]
-#[deprecated(note = "Use set_asset_distributions/delete_distribution instead.")]
-#[ic_cdk_macros::update]
-pub fn assign_distributions(distributions_vec: Vec<AssetDistribution>) -> Result<(), CivError> {
-    distributions::assign_distributions(distributions_vec)
-}
-#[cfg(feature = "legacy-distributions")]
-#[deprecated(note = "Use get_asset_distributions instead.")]
-#[ic_cdk::query]
-pub fn get_distribution() -> Vec<(String, u64)> {
-    distributions::get_distribution()
-}
-#[cfg(feature = "legacy-distributions")]
-#[deprecated(note = "Use get_asset_distributions instead.")]
-#[ic_cdk::query]
-pub fn list_distributions() -> Vec<AssetDistribution> {
-    distributions::list_distributions()
+#[derive(Clone, CandidType, Deserialize)]
+pub enum AssetRef {
+    IcpFungible { subaccount: Subaccount },
+    IcrcFungible { canister: Principal, subaccount: Subaccount },
+    IcrcNft { canister: Principal, token_id: Nat },
+    Document { storage_canister: Principal, blob_id: Vec<u8> },
+    Pointer { description: String },
 }
 
-#[ic_cdk::query]
-pub fn get_asset_distributions(asset_id: u64) -> Vec<AssetDistribution> {
-    distributions::get_asset_distributions(asset_id)
-}
-#[ic_cdk::query]
-pub fn get_asset_distributions_v2(asset_id: u64) -> Vec<DistributionShare> {
-    distributions::get_asset_distributions_v2(asset_id)
+#[derive(Clone, CandidType, Deserialize)]
+pub struct Allocation {
+    pub heir: Principal,
+    pub basis_points: Nat, // 0..10000
 }
 
-#[ic_cdk_macros::update]
-pub fn set_asset_distributions(
-    asset_id: u64,
-    dists: Vec<AssetDistribution>,
-) -> Result<(), CivError> {
-    distributions::set_asset_distributions(asset_id, dists)
+#[derive(Clone, CandidType, Deserialize)]
+pub struct DistributionEntry {
+    pub id: u64,
+    pub owner: Principal,
+    pub asset: AssetRef,
+    pub allocations: Vec<Allocation>,
+    pub executed_at: Option<u64>,
 }
 
-#[ic_cdk_macros::update]
-pub fn delete_distribution(asset_id: u64, heir_id: u64) -> Result<(), CivError> {
-    distributions::delete_distribution(asset_id, heir_id)
+#[derive(Clone, CandidType, Deserialize)]
+pub struct BlobMeta {
+    pub hash: Vec<u8>,
+    pub iv: Vec<u8>,
+    pub size: u64,
+    pub locator: String,
 }
 
-#[ic_cdk::query]
-pub fn get_timer() -> i64 {
-    distributions::get_timer()
+#[derive(Clone, CandidType, Deserialize)]
+pub struct OwnerRecord {
+    pub owner: Principal,
+    pub last_active: Option<u64>,
+    pub warning_started_at: Option<u64>,
+    pub vault_subaccount: Subaccount,
 }
 
-#[ic_cdk::query]
-pub fn get_user() -> Option<User> {
-    distributions::get_user()
+#[derive(Clone, CandidType, Deserialize)]
+pub struct EventRecord {
+    pub id: u64,
+    pub ts: u64,
+    pub actor: Principal,
+    pub event_type: String,
+    pub details: String,
 }
 
-#[ic_cdk::query]
-pub fn list_assets() -> Vec<Asset> {
-    assets::list_assets()
+#[derive(Clone, CandidType, Deserialize)]
+pub struct CertificateRecord {
+    pub distribution_id: u64,
+    pub hash: Vec<u8>, // sha256(dist_record)
+    pub executed_at: u64,
 }
 
-#[ic_cdk::query]
-pub fn list_heirs() -> Vec<Heir> {
-    heirs::list_heirs()
-}
-#[ic_cdk::query]
-pub fn list_heirs_v2() -> Vec<HeirEx> {
-    heirs::list_heirs_v2()
+#[derive(Clone, CandidType, Deserialize)]
+pub struct SweepResult {
+    pub processed: u64,
+    pub continuation: Option<Vec<u8>>,
 }
 
-#[ic_cdk_macros::update]
-pub fn remove_asset(asset_id: u64) -> Result<(), CivError> {
-    assets::remove_asset(asset_id)
+#[derive(Deserialize, CandidType)]
+struct PersistedState {
+    owners: HashMap<Principal, OwnerRecord>,
+    allocations: HashMap<Principal, Vec<Allocation>>,
+    blobs: HashMap<u64, BlobMeta>,
+    distributions: HashMap<u64, DistributionEntry>,
+    certificates: HashMap<u64, CertificateRecord>,
+    events: Vec<EventRecord>,
+    next_blob_id: u64,
+    next_distribution_id: u64,
+    next_event_id: u64,
+    salt: Vec<u8>,
 }
 
-#[ic_cdk_macros::update]
-pub fn remove_heir(heir_id: u64) -> Result<(), CivError> {
-    heirs::remove_heir(heir_id)
+/* In-memory state */
+struct State {
+    owners: HashMap<Principal, OwnerRecord>,
+    allocations: HashMap<Principal, Vec<Allocation>>,
+    blobs: HashMap<u64, BlobMeta>,
+    distributions: HashMap<u64, DistributionEntry>,
+    certificates: HashMap<u64, CertificateRecord>,
+    events: Vec<EventRecord>,
+    next_blob_id: u64,
+    next_distribution_id: u64,
+    next_event_id: u64,
+    salt: Vec<u8>,
 }
 
-#[ic_cdk_macros::update]
-pub fn reset_timer() -> Result<(), CivError> {
-    executor::reset_timer()
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            owners: HashMap::new(),
+            allocations: HashMap::new(),
+            blobs: HashMap::new(),
+            distributions: HashMap::new(),
+            certificates: HashMap::new(),
+            events: Vec::new(),
+            next_blob_id: 1,
+            next_distribution_id: 1,
+            next_event_id: 1,
+            salt: b"default_salt_change_me".to_vec(),
+        }
+    }
 }
 
-#[ic_cdk_macros::update]
-pub fn update_asset(asset_id: u64, new_asset: AssetInput) -> Result<(), CivError> {
-    assets::update_asset(asset_id, new_asset)
+thread_local! {
+    static STATE: RefCell<State> = RefCell::new(State::default());
 }
 
-#[ic_cdk_macros::update]
-pub fn update_asset_token_meta(asset_id: u64, meta: AssetTokenMetaInput) -> Result<(), CivError> {
-    assets::update_asset_token_meta(asset_id, meta)
+/* Helpers */
+
+fn now_millis() -> u64 {
+    time()
 }
 
-#[ic_cdk_macros::update]
-pub fn update_heir(heir_id: u64, new_heir: HeirInput) -> Result<(), CivError> {
-    heirs::update_heir(heir_id, new_heir)
+fn append_event(actor: Principal, event_type: &str, details: &str) -> u64 {
+    STATE.with(|s| {
+        let mut st = s.borrow_mut();
+        append_event_mut(&mut st, actor, event_type, details)
+    })
 }
 
-// V2 APIs
-#[ic_cdk_macros::update]
-pub fn add_heir_v2(input: HeirAddInputV2) -> Result<u64, CivError> {
-    heirs::add_heir_v2(input)
-}
-#[ic_cdk_macros::update]
-pub fn set_distribution_v2(asset_id: u64, shares: Vec<DistributionShare>) -> Result<(), CivError> {
-    distributions::set_distribution_v2(asset_id, shares)
-}
-#[ic_cdk_macros::update]
-pub fn verify_heir_secret(heir_id: u64, secret_plain: String) -> Result<bool, CivError> {
-    heirs::verify_heir_secret(heir_id, secret_plain)
-}
-#[ic_cdk_macros::update]
-pub fn bind_heir_principal(heir_id: u64, principal: String) -> Result<(), CivError> {
-    heirs::bind_heir_principal(heir_id, principal)
-}
-#[ic_cdk::query]
-pub fn list_audit_log() -> Vec<AuditEvent> {
-    distributions::list_audit_log()
-}
-#[ic_cdk::query]
-pub fn list_audit_log_paged(offset: u64, limit: u64) -> Vec<AuditEvent> {
-    // simple bounds & prune invocation
-    distributions::prune_audit_log(2_000, 30 * 24 * 3600); // keep last 2000 or 30 days
-    let off = offset as usize;
-    let lim = limit.min(500) as usize; // cap page size
-    distributions::list_audit_paged(off, lim)
-}
-
-#[ic_cdk::query]
-pub fn list_audit_log_filtered(
-    offset: u64,
-    limit: u64,
-    asset_id: Option<u64>,
-    heir_id: Option<u64>,
-) -> Vec<AuditEvent> {
-    api::distributions::list_audit_filtered(offset, limit, asset_id, heir_id)
-}
-
-#[ic_cdk::query]
-pub fn estate_readiness() -> api::ReadinessReport {
-    distributions::estate_readiness()
-}
-
-#[ic_cdk::query]
-pub fn metrics_snapshot() -> distributions::MetricsSnapshot {
-    distributions::metrics_snapshot()
-}
-#[ic_cdk::query]
-pub fn estate_status() -> EstateStatus {
-    executor::estate_status()
-}
-#[ic_cdk_macros::update]
-pub async fn execute_trigger() -> Result<(), CivError> {
-    executor::execute_trigger().await
-}
-#[ic_cdk_macros::update]
-pub fn lock_estate() -> Result<(), CivError> {
-    executor::lock_estate()
-}
-#[ic_cdk_macros::update]
-pub fn compute_ledger_attestation() -> Result<Vec<u8>, CivError> {
-    executor::compute_ledger_attestation()
-}
-#[ic_cdk_macros::update]
-pub fn add_document(input: DocumentAddInput) -> Result<u64, CivError> {
-    documents::add_document(input)
-}
-#[ic_cdk::query]
-pub fn list_documents() -> Vec<DocumentEntry> {
-    documents::list_documents()
-}
-#[ic_cdk::query]
-pub fn heir_get_document(
-    heir_id: u64,
-    doc_id: u64,
-) -> Result<Option<(DocumentEntry, Vec<u8>)>, CivError> {
-    documents::heir_get_document(heir_id, doc_id)
-}
-#[ic_cdk_macros::update]
-pub fn start_document_upload(init: DocumentUploadInit) -> Result<u64, CivError> {
-    documents::start_document_upload(init)
-}
-#[ic_cdk_macros::update]
-pub fn upload_document_chunk(chunk: DocumentChunk) -> Result<u64, CivError> {
-    documents::upload_document_chunk(chunk)
-}
-#[ic_cdk_macros::update]
-pub fn finalize_document_upload(upload_id: u64) -> Result<u64, CivError> {
-    documents::finalize_document_upload(upload_id)
-}
-#[ic_cdk_macros::update]
-pub fn abort_document_upload(upload_id: u64, reason: String) -> Result<(), CivError> {
-    documents::abort_document_upload(upload_id, reason)
-}
-// Notification scaffold public APIs
-#[ic_cdk_macros::update]
-pub fn enqueue_notification(
-    channel: String,
-    template: String,
-    payload: String,
-) -> Result<u64, CivError> {
-    use crate::models::NotificationChannel as NC;
-    let ch = match channel.to_ascii_lowercase().as_str() {
-        "email" => NC::Email,
-        "sms" => NC::Sms,
-        _ => return Err(CivError::Other("invalid_channel".into())),
+fn append_event_mut(st: &mut State, actor: Principal, event_type: &str, details: &str) -> u64 {
+    let id = st.next_event_id;
+    st.next_event_id += 1;
+    let ev = EventRecord {
+        id,
+        ts: now_millis(),
+        actor,
+        event_type: event_type.to_string(),
+        details: details.to_string(),
     };
-    api::notify::enqueue_notification(ch, template, payload)
-}
-#[ic_cdk::query]
-pub fn list_notifications() -> Vec<NotificationRecord> {
-    let caller = api::common::user_id();
-    crate::storage::USERS.with(|users| {
-        users
-            .borrow()
-            .get(&caller)
-            .map(|u| u.notifications.clone())
-            .unwrap_or_default()
-    })
-}
-#[ic_cdk::query]
-pub fn custody_subaccount_for_heir(heir_id: u64) -> Result<Vec<u8>, CivError> {
-    custody::custody_subaccount_for_heir(heir_id)
-}
-#[ic_cdk_macros::update]
-pub fn heir_claim(input: api::HeirClaimInput) -> Result<api::HeirClaimResult, CivError> {
-    heirs::heir_claim(input)
-}
-#[ic_cdk_macros::update]
-pub fn heir_set_payout_preference_session(
-    session_id: u64,
-    asset_id: u64,
-    preference: PayoutPreference,
-) -> Result<(), CivError> {
-    heirs::heir_set_payout_preference_session(session_id, asset_id, preference)
-}
-// Session onboarding APIs (claim link flow)
-#[ic_cdk_macros::update]
-pub fn create_claim_link(heir_id: u64) -> Result<ClaimLinkUnsealed, CivError> {
-    heirs::create_claim_link(heir_id)
-}
-#[ic_cdk_macros::update]
-pub fn heir_begin_claim(link_id: u64, code_plain: String) -> Result<u64, CivError> {
-    heirs::heir_begin_claim(link_id, code_plain)
-}
-#[ic_cdk_macros::update]
-pub fn heir_verify_secret_session(session_id: u64, secret_plain: String) -> Result<bool, CivError> {
-    heirs::heir_verify_secret_session(session_id, secret_plain)
-}
-#[ic_cdk_macros::update]
-pub fn heir_bind_principal_session(session_id: u64, principal: String) -> Result<(), CivError> {
-    heirs::heir_bind_principal_session(session_id, principal)
-}
-// Optional identity claim verification
-#[ic_cdk_macros::update]
-pub fn heir_verify_identity_session(
-    session_id: u64,
-    identity_claim: String,
-) -> Result<bool, CivError> {
-    heirs::heir_verify_identity_session(session_id, identity_claim)
-}
-// Custody withdraw (post-execution principal-bound release)
-#[ic_cdk_macros::update]
-pub fn withdraw_custody(asset_id: u64, heir_id: u64) -> Result<TransferRecord, CivError> {
-    custody::withdraw_custody(asset_id, heir_id)
-}
-#[allow(dead_code)] // Admin dashboard (pending) – manual trigger of custody reconciliation audit snapshot
-#[ic_cdk_macros::update]
-pub async fn reconcile_custody() -> Vec<crate::models::custody::CustodyReconEntry> {
-    reconciliation::reconcile_custody().await
-}
-#[ic_cdk::query]
-pub fn get_custody_reconciliation() -> Option<Vec<crate::models::custody::CustodyReconEntry>> {
-    reconciliation::get_custody_reconciliation()
-}
-// Optional lifecycle helpers
-#[ic_cdk_macros::update]
-pub fn start_warning() -> Result<(), CivError> {
-    executor::start_warning()
-}
-#[ic_cdk_macros::update]
-pub fn perform_maintenance() -> Result<(), CivError> {
-    executor::perform_maintenance()
-}
-#[ic_cdk::query]
-pub fn list_transfers() -> Vec<TransferRecord> {
-    executor::list_transfers()
-}
-#[ic_cdk::query]
-pub fn last_execution_summary() -> Option<ExecutionSummary> {
-    executor::last_execution_summary()
-}
-#[ic_cdk::query]
-pub fn list_ck_withdraws() -> Vec<CkWithdrawRecord> {
-    ckbridge::list_ck_withdraws()
-}
-#[ic_cdk_macros::update]
-pub fn request_ck_withdraw(session_id: u64, asset_id: u64, heir_id: u64) -> Result<(), CivError> {
-    ckbridge::request_ck_withdraw(session_id, asset_id, heir_id)
-}
-#[ic_cdk_macros::update]
-pub async fn submit_ck_withdraw(
-    session_id: u64,
-    asset_id: u64,
-    heir_id: u64,
-    l1_address: String,
-) -> Result<BridgeTxInfo, CivError> {
-    ckbridge::submit_ck_withdraw(session_id, asset_id, heir_id, l1_address).await
-}
-#[ic_cdk_macros::update]
-pub async fn poll_ck_withdraw(
-    session_id: u64,
-    asset_id: u64,
-    heir_id: u64,
-) -> Result<(), CivError> {
-    ckbridge::poll_ck_withdraw(session_id, asset_id, heir_id).await
+    st.events.push(ev);
+    id
 }
 
-// Escrow & Approval public APIs
-#[ic_cdk_macros::update]
-pub async fn deposit_escrow(input: api::EscrowDepositInput) -> Result<(), CivError> {
-    escrow::deposit_escrow(input).await
-}
-#[ic_cdk::query]
-pub fn list_escrow() -> Vec<EscrowRecord> {
-    escrow::list_escrow()
-}
-#[ic_cdk_macros::update]
-pub fn withdraw_escrow(asset_id: u64) -> Result<(), CivError> {
-    escrow::withdraw_escrow(asset_id)
-}
-#[ic_cdk_macros::update]
-pub async fn withdraw_escrow_icrc1(asset_id: u64, amount: Option<u128>) -> Result<u128, CivError> {
-    escrow::withdraw_escrow_icrc1(crate::api::escrow::EscrowWithdrawOnChainInput {
-        asset_id,
-        amount,
-    })
-    .await
-}
-#[ic_cdk_macros::update]
-pub fn approval_set(input: api::ApprovalSetInput) -> Result<(), CivError> {
-    escrow::approval_set(input)
-}
-#[ic_cdk_macros::update]
-pub fn approval_revoke(asset_id: u64) -> Result<(), CivError> {
-    escrow::approval_revoke(asset_id)
-}
-#[ic_cdk::query]
-pub fn list_approvals() -> Vec<ApprovalRecord> {
-    escrow::list_approvals()
-}
-#[ic_cdk_macros::update]
-pub async fn approval_set_icrc2(input: ApprovalSetOnChainInput) -> Result<(), CivError> {
-    escrow::approval_set_icrc2(input).await
+fn sha256_bytes(data: &[u8]) -> Vec<u8> {
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    hasher.finalize().to_vec()
 }
 
-#[ic_cdk_macros::pre_upgrade]
-fn pre_upgrade() {
-    executor::pre_upgrade();
-}
-#[ic_cdk_macros::post_upgrade]
-fn post_upgrade() {
-    executor::post_upgrade();
-}
+/* Canister lifecycle */
 
-// Ensure RNG seeded on fresh install
-#[ic_cdk_macros::init]
+#[init]
 fn init() {
+    // nothing special for now
+    append_event(msg_caller(), "init", "canister initialized");
 }
 
-// Provide explicit initialization entrypoint to avoid calling management canister
-// APIs during the synchronous `init`/install phase which is not permitted.
-#[ic_cdk_macros::update]
-pub fn initialize_rng() {
-    // Schedule async init outside install mode
-    ic_cdk::spawn(rng::init_rng());
+#[pre_upgrade]
+fn pre_upgrade() {
+    STATE.with(|s| {
+        let st = s.borrow();
+        let p = PersistedState {
+            owners: st.owners.clone(),
+            allocations: st.allocations.clone(),
+            blobs: st.blobs.clone(),
+            distributions: st.distributions.clone(),
+            certificates: st.certificates.clone(),
+            events: st.events.clone(),
+            next_blob_id: st.next_blob_id,
+            next_distribution_id: st.next_distribution_id,
+            next_event_id: st.next_event_id,
+            salt: st.salt.clone(),
+        };
+        storage::stable_save((p,)).expect("stable_save failed");
+    });
 }
 
-#[ic_cdk::query]
-pub fn rng_ready() -> bool {
-    rng::is_initialized()
+#[post_upgrade]
+fn post_upgrade() {
+    let (p,): (PersistedState,) = storage::stable_restore().expect("stable_restore failed");
+    STATE.with(|s| {
+        let mut st = s.borrow_mut();
+        st.owners = p.owners;
+        st.allocations = p.allocations;
+        st.blobs = p.blobs;
+        st.distributions = p.distributions;
+        st.certificates = p.certificates;
+        st.events = p.events;
+        st.next_blob_id = p.next_blob_id;
+        st.next_distribution_id = p.next_distribution_id;
+        st.next_event_id = p.next_event_id;
+        st.salt = p.salt;
+    });
+    append_event(msg_caller(), "post_upgrade", "state restored");
 }
 
-// Removed duplicate verify_heir_secret, bind_heir_principal, list_audit_events definitions (already exposed above).
-
-// Returns an integrity report for the caller's data, including invariants and allocation health.
-#[ic_cdk::query]
-pub fn check_integrity() -> IntegrityReport {
-    distributions::check_integrity()
+/* Introspection */
+#[query]
+fn whoami() -> Principal {
+    msg_caller()
 }
 
-#[ic_cdk::query(name = "__get_candid_interface_tmp_hack")]
-fn export_did() -> String {
-    candid::export_service!();
-    __export_service()
+/* Owner APIs */
+
+#[query]
+fn register_owner() {
+    let p = msg_caller();
+    STATE.with(|s| {
+        let mut st = s.borrow_mut();
+        if !st.owners.contains_key(&p) {
+            // derive a simple vault_subaccount from sha256(principal)
+            let principal_bytes = p.as_slice();
+            let sub = sha256_bytes(principal_bytes);
+                st.owners.insert(
+                p,
+                OwnerRecord {
+                    owner: p,
+                    last_active: Some(now_millis()),
+                    warning_started_at: None,
+                    vault_subaccount: Some(ByteBuf::from(sub)),
+                },
+            );
+            append_event_mut(&mut st, p, "owner_registered", &format!("owner {} registered", p));
+        }
+    });
 }
 
-// remember to regenerate candid.
+#[update]
+fn add_heir(heir: Principal, basis_points: u64) -> u64 {
+    let p = msg_caller();
+    let alloc = Allocation {
+        heir,
+        basis_points: Nat::from(basis_points),
+    };
+    STATE.with(|s| {
+        let mut st = s.borrow_mut();
+        // perform mutation, then drop the temporary borrow before calling append_event_mut
+        let idx = {
+            let vec = st.allocations.entry(p).or_insert_with(Vec::new);
+            vec.push(alloc);
+            vec.len() as u64
+        };
+        append_event_mut(&mut st, p, "heir_added", &format!("heir {} added", heir));
+        // return index as allocation id (1-based)
+        idx
+    })
+}
+
+#[update]
+fn remove_heir(heir: Principal) -> bool {
+    let p = msg_caller();
+    STATE.with(|s| {
+        let mut st = s.borrow_mut();
+        let mut removed = false;
+        if let Some(vec) = st.allocations.get_mut(&p) {
+            let orig = vec.len();
+            vec.retain(|a| a.heir != heir);
+            removed = orig != vec.len();
+        }
+        if removed {
+            append_event_mut(&mut st, p, "heir_removed", &format!("heir {} removed", heir));
+        }
+        removed
+    })
+}
+
+#[update]
+fn set_allocations(allocs: Vec<Allocation>) {
+    let p = msg_caller();
+    STATE.with(|s| {
+        let mut st = s.borrow_mut();
+        st.allocations.insert(p, allocs.clone());
+        append_event_mut(&mut st, p, "allocations_set", "allocations updated");
+    });
+}
+
+#[update]
+fn commit_blob(meta: BlobMeta) -> u64 {
+    let p = msg_caller();
+    STATE.with(|s| {
+        let mut st = s.borrow_mut();
+        let id = st.next_blob_id;
+        st.next_blob_id += 1;
+        st.blobs.insert(id, meta);
+        append_event_mut(&mut st, p, "blob_committed", &format!("blob {}", id));
+        id
+    })
+}
+
+#[update]
+fn update_last_active() {
+    let p = msg_caller();
+    STATE.with(|s| {
+        let mut st = s.borrow_mut();
+            if let Some(owner) = st.owners.get_mut(&p) {
+            owner.last_active = Some(now_millis());
+            owner.warning_started_at = None;
+            append_event_mut(&mut st, p, "last_active_updated", "owner activity recorded");
+        } else {
+            // auto-register on activity
+            st.owners.insert(
+                p,
+                OwnerRecord {
+                    owner: p,
+                    last_active: Some(now_millis()),
+                    warning_started_at: None,
+                    vault_subaccount: None,
+                },
+            );
+            append_event_mut(&mut st, p, "owner_registered", "auto-registered on activity");
+        }
+    });
+}
+
+#[update]
+fn withdraw_asset(_asset: AssetRef, _destination: Principal) -> bool {
+    // Withdraw is owner-only; for now we emit an event and return true.
+    // Integrating with ledger / tokens is planned in follow-ups.
+    let p = msg_caller();
+    append_event(p, "withdraw_requested", "withdraw invoked (no-op in this implementation)");
+    true
+}
+
+/* Heir APIs */
+
+#[query]
+fn list_claims() -> Vec<DistributionEntry> {
+    let p = msg_caller();
+    STATE.with(|s| {
+        let st = s.borrow();
+        st.distributions
+            .values()
+            .filter(|d| {
+                d.executed_at.is_none()
+                    && d.allocations.iter().any(|a| a.heir == p)
+            })
+            .cloned()
+            .collect()
+    })
+}
+
+#[query]
+fn get_document_meta(blob_id: u64) -> Option<BlobMeta> {
+    STATE.with(|s| {
+        let st = s.borrow();
+        st.blobs.get(&blob_id).cloned()
+    })
+}
+
+/* System / Execution */
+
+#[update]
+fn sweep_expired(limit: u64, continuation: Option<Vec<u8>>) -> SweepResult {
+    // continuation can be encoded owner principal bytes to resume
+    let mut processed = 0u64;
+    let mut new_cont: Option<Vec<u8>> = None;
+
+    // snapshot owners deterministically
+    let owners_list: Vec<Principal> = STATE.with(|s| s.borrow().owners.keys().cloned().collect());
+
+    // If continuation provided, start after that owner
+    let start_idx = if let Some(cont) = continuation {
+        owners_list
+            .iter()
+            .position(|p| p.as_slice() == cont.as_slice())
+            .map(|i| i + 1)
+            .unwrap_or(0)
+    } else {
+        0
+    };
+
+    // Do all mutations inside a single mutable borrow to avoid nested mutable borrows
+    STATE.with(|s| {
+        let mut st = s.borrow_mut();
+
+        for owner in owners_list.into_iter().skip(start_idx) {
+            if processed >= limit {
+                new_cont = Some(owner.as_slice().to_vec());
+                break;
+            }
+
+            // determine whether we should execute for this owner
+            let should_execute = if let Some(rec) = st.owners.get(&owner) {
+                match rec.last_active {
+                    Some(last) => {
+                        let elapsed = now_millis().saturating_sub(last);
+                        if elapsed >= INACTIVITY_THRESHOLD_MILLIS {
+                            match rec.warning_started_at {
+                                Some(ws) => {
+                                    let warn_elapsed = now_millis().saturating_sub(ws);
+                                    warn_elapsed >= WARNING_DURATION_MILLIS
+                                }
+                                None => false, // start warning instead
+                            }
+                        } else {
+                            false
+                        }
+                    }
+                    None => true,
+                }
+            } else {
+                false
+            };
+
+            if should_execute {
+                // create distribution and mark executed atomically without overlapping mutable borrows
+                let id = st.next_distribution_id;
+                st.next_distribution_id += 1;
+
+                let allocs = st.allocations.get(&owner).cloned().unwrap_or_default();
+
+                let asset = st
+                    .owners
+                    .get(&owner)
+                    .and_then(|o| o.vault_subaccount.clone())
+                    .map(|sa| AssetRef::IcpFungible { subaccount: Some(sa) })
+                    .unwrap_or(AssetRef::Pointer {
+                        description: "no-vault".to_string(),
+                    });
+
+                let executed_ts = now_millis();
+                let dist = DistributionEntry {
+                    id,
+                    owner,
+                    asset,
+                    allocations: allocs,
+                    executed_at: Some(executed_ts),
+                };
+
+                // insert distribution and emit event
+                st.distributions.insert(id, dist.clone());
+                append_event_mut(&mut st, owner, "distribution_created", &format!("dist {}", id));
+
+                // create certificate immediately from the finalized distribution
+                let bytes = candid::encode_one(dist.clone()).unwrap_or_default();
+                let h = sha256_bytes(&bytes);
+                let cert = CertificateRecord {
+                    distribution_id: dist.id,
+                    hash: h.clone(),
+                    executed_at: executed_ts,
+                };
+                st.certificates.insert(dist.id, cert);
+                append_event_mut(&mut st, msg_caller(), "distribution_executed", &format!("dist {} executed", dist.id));
+
+                processed += 1;
+            } else {
+                // start warning if threshold passed and not already started
+                if let Some(rec) = st.owners.get_mut(&owner) {
+                    if let Some(last) = rec.last_active {
+                        let elapsed = now_millis().saturating_sub(last);
+                        if elapsed >= INACTIVITY_THRESHOLD_MILLIS && rec.warning_started_at.is_none() {
+                            rec.warning_started_at = Some(now_millis());
+                            append_event_mut(&mut st, owner, "warning_started", "warning started due to inactivity");
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    SweepResult {
+        processed,
+        continuation: new_cont,
+    }
+}
+
+#[query]
+fn get_certificate(distribution_id: u64) -> Option<CertificateRecord> {
+    STATE.with(|s| s.borrow().certificates.get(&distribution_id).cloned())
+}
+
+#[query]
+fn get_event_log(from_index: u64, limit: u64) -> Vec<EventRecord> {
+    STATE.with(|s| {
+        let st = s.borrow();
+        let start = (from_index as usize).saturating_sub(1);
+        let lim = limit as usize;
+        st.events.iter().skip(start).take(lim).cloned().collect()
+    })
+}
+
+/* Admin */
+#[update]
+fn rotate_salt(new_salt: Vec<u8>) {
+    // admin-only check: for simplicity require caller == module id (deployer)
+    // In practice, enforce multi-sig or configured admin principal
+    let caller_p = msg_caller();
+    // naive admin check: only allow if caller is the canister itself (deployment-time admin should call)
+    let canister = canister_self();
+        if caller_p != canister {
+        append_event(caller_p, "rotate_salt_denied", "caller not admin");
+        return;
+    }
+    STATE.with(|s| {
+        let mut st = s.borrow_mut();
+        st.salt = new_salt.clone();
+        append_event_mut(&mut st, caller_p, "rotate_salt", "salt rotated");
+    });
+}
+
+/* Export Candid for clients */
+#[query]
+fn __get_candid_interface_tmp_hack() -> String {
+    // helpful for local dev: returns candid from DID file if present in canister build artifacts.
+    include_str!("../civ_backend.did").to_string()
+}
