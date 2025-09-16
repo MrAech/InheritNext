@@ -1,4 +1,4 @@
-use candid::{CandidType, Deserialize, Nat};
+use candid::{CandidType, Deserialize, Nat, export_service};
 use ic_cdk::api::{time, msg_caller, canister_self};
 use ic_cdk::{storage};
 use candid::Principal;
@@ -7,6 +7,7 @@ use serde_bytes::ByteBuf;
 use sha2::{Digest, Sha256};
 use std::cell::RefCell;
 use std::collections::HashMap;
+
 
 /*
   Lightweight on-chain backend implementation:
@@ -182,7 +183,16 @@ fn sha256_bytes(data: &[u8]) -> Vec<u8> {
 #[init]
 fn init() {
     // nothing special for now
-    append_event(msg_caller(), "init", "canister initialized");
+    #[cfg(not(test))]
+    {
+        append_event(msg_caller(), "init", "canister initialized");
+    }
+    #[cfg(test)]
+    {
+        // In unit tests there is no msg_caller; record a synthetic init event
+        let p = Principal::from_text("2vxsx-fae").unwrap();
+        append_event(p, "init", "canister initialized (test)");
+    }
 }
 
 #[pre_upgrade]
@@ -529,10 +539,11 @@ fn rotate_salt(new_salt: Vec<u8>) {
 }
 
 /* Export Candid for clients */
-#[query]
+#[query(name = "__get_candid_interface_tmp_hack")]
 fn __get_candid_interface_tmp_hack() -> String {
-    // helpful for local dev: returns candid from DID file if present in canister build artifacts.
-    include_str!("../civ_backend.did").to_string()
+    // generate the service description and call the helper that the macro provides
+    export_service!();
+    __export_service()
 }
 
 #[cfg(test)]

@@ -1,86 +1,89 @@
+type Subaccount = opt blob;
+
+type AssetRef = variant {
+  IcpFungible : record { subaccount : Subaccount };
+  IcrcFungible : record { canister : principal; subaccount : Subaccount };
+  IcrcNft : record { canister : principal; token_id : nat };
+  Document : record { storage_canister : principal; blob_id : vec nat8 };
+  Pointer : record { description : text };
+};
+
+type Allocation = record {
+  heir : principal;
+  basis_points : nat;
+};
+
+type DistributionEntry = record {
+  id : nat64;
+  owner : principal;
+  asset : AssetRef;
+  allocations : vec Allocation;
+  executed_at : opt nat64;
+};
+
+type BlobMeta = record {
+  hash : vec nat8;
+  iv : vec nat8;
+  size : nat64;
+  locator : text;
+};
+
+type OwnerRecord = record {
+  owner : principal;
+  last_active : opt nat64;
+  warning_started_at : opt nat64;
+  vault_subaccount : Subaccount;
+};
+
+type EventRecord = record {
+  id : nat64;
+  ts : nat64;
+  actor : principal;
+  event_type : text;
+  details : text;
+};
+
+type CertificateRecord = record {
+  distribution_id : nat64;
+  hash : vec nat8;
+  executed_at : nat64;
+};
+
+type SweepResult = record {
+  processed : nat64;
+  continuation : opt vec nat8;
+};
+
 service : {
-  /* Basic types */
-  Subaccount : opt blob;
+  /* lifecycle */
+  init : () -> ();
+  pre_upgrade : () -> ();
+  post_upgrade : () -> ();
 
-  AssetRef : variant {
-    ICP_FUNGIBLE : record { subaccount : Subaccount };
-    ICRC_FUNGIBLE: record { canister: principal; subaccount: Subaccount };
-    ICRC_NFT     : record { canister: principal; token_id: nat };
-    DOCUMENT     : record { storage_canister: principal; blob_id: blob };
-    POINTER      : record { description: text }
-  };
-
-  Allocation : record {
-    heir: principal;
-    basis_points: nat; /* 0..10000 */
-  };
-
-  DistributionEntry : record {
-    id: nat;
-    owner: principal;
-    asset: AssetRef;
-    allocations: vec Allocation;
-    executed_at: opt nat;
-  };
-
-  BlobMeta : record {
-    hash: blob;
-    iv: blob;
-    size: nat;
-    locator: text;
-  };
-
-  OwnerRecord : record {
-    owner: principal;
-    last_active: opt nat;
-    warning_started_at: opt nat;
-    vault_subaccount: Subaccount;
-  };
-
-  EventRecord : record {
-    id: nat;
-    ts: nat;
-    actor: principal;
-    event_type: text;
-    details: text;
-  };
-
-  CertificateRecord : record {
-    distribution_id: nat;
-    hash: blob; /* sha256(dist_record) */
-    executed_at: nat;
-  };
-
-  /* Results & helpers */
-  SweepResult : record {
-    processed: nat;
-    continuation: opt blob;
-  };
-
-  /*
-   * Methods
-   */
-
-  /* Owner APIs */
-  register_owner : () -> () query; /* idempotent registration (caller becomes owner) */
-  add_heir : (principal, nat) -> (nat) update; /* (heir, basis_points) -> allocation_id */
-  remove_heir : (principal) -> (bool) update;
-  set_allocations : (vec Allocation) -> () update;
-  commit_blob : (BlobMeta) -> (nat) update; /* returns blob id */
-  update_last_active : () -> () update;
-  withdraw_asset : (AssetRef, principal) -> (bool) update; /* owner withdraws asset to principal */
-
-  /* Heir APIs */
-  list_claims : () -> (vec DistributionEntry) query; /* caller sees distributions where they are an heir and not executed */
-  get_document_meta : (nat) -> (opt BlobMeta) query; /* blob id -> metadata */
-
-  /* System / Execution */
-  sweep_expired : (nat, opt blob) -> (SweepResult) update; /* limit, continuation -> processed + continuation */
-  get_certificate : (nat) -> (opt CertificateRecord) query;
-  get_event_log : (nat, nat) -> (vec EventRecord) query; /* from_index, limit */
-
-  /* Admin */
-  rotate_salt : (blob) -> () update; /* admin-only */
-  /* Introspection */
+  /* introspection */
   whoami : () -> (principal) query;
+
+  /* owner APIs */
+  register_owner : () -> ();
+  add_heir : (principal, nat64) -> (nat64);
+  remove_heir : (principal) -> (bool);
+  set_allocations : (vec Allocation) -> ();
+  commit_blob : (BlobMeta) -> (nat64);
+  update_last_active : () -> ();
+  withdraw_asset : (AssetRef, principal) -> (bool);
+
+  /* heir APIs */
+  list_claims : () -> (vec DistributionEntry) query;
+  get_document_meta : (nat64) -> (opt BlobMeta) query;
+
+  /* system/execution */
+  sweep_expired : (nat64, opt vec nat8) -> (SweepResult);
+  get_certificate : (nat64) -> (opt CertificateRecord) query;
+  get_event_log : (nat64, nat64) -> (vec EventRecord) query;
+
+  /* admin */
+  rotate_salt : (vec nat8) -> ();
+
+  /* candid export */
+  __get_candid_interface_tmp_hack : () -> (text) query;
 }
