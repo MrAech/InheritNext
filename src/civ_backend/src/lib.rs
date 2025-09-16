@@ -137,7 +137,17 @@ thread_local! {
 /* Helpers */
 
 fn now_millis() -> u64 {
-    time()
+    // Use IC time in canister runtime; fall back to host SystemTime during unit tests.
+    #[cfg(not(test))]
+    {
+        time()
+    }
+    #[cfg(test)]
+    {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let dur = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time");
+        dur.as_millis() as u64
+    }
 }
 
 fn append_event(actor: Principal, event_type: &str, details: &str) -> u64 {
@@ -523,4 +533,38 @@ fn rotate_salt(new_salt: Vec<u8>) {
 fn __get_candid_interface_tmp_hack() -> String {
     // helpful for local dev: returns candid from DID file if present in canister build artifacts.
     include_str!("../civ_backend.did").to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use candid::Principal;
+
+    #[test]
+    fn test_sha256_bytes_consistent() {
+        let a = b"hello world";
+        let h1 = sha256_bytes(a);
+        let h2 = sha256_bytes(a);
+        assert_eq!(h1, h2);
+        // Known prefix for "hello world" SHA256 (first 4 bytes)
+        assert_eq!(&h1[..4], &sha256_bytes(b"hello world")[..4]);
+    }
+
+    #[test]
+    fn test_append_event_mut_increments_id() {
+        let mut st = State::default();
+        let actor = Principal::from_text("2vxsx-fae").unwrap();
+        let id1 = append_event_mut(&mut st, actor.clone(), "ev1", "details1");
+        let id2 = append_event_mut(&mut st, actor.clone(), "ev2", "details2");
+        assert_eq!(id1 + 1, id2);
+        assert_eq!(st.events.len(), 2);
+        assert_eq!(st.events[0].event_type, "ev1");
+        assert_eq!(st.events[1].event_type, "ev2");
+    }
+
+    #[test]
+    fn test_state_default_salt_present() {
+        let st = State::default();
+        assert!(!st.salt.is_empty());
+    }
 }
