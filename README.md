@@ -1,70 +1,74 @@
- # 🧬 Cross-Chain Inheritance Vault (CIV)
+# InheritNext: Decentralized Inheritance Management System
 
- The **Cross-Chain Inheritance Vault (CIV)** is a decentralized platform designed to help users **securely plan, manage, and automate the inheritance and recovery of their crypto assets** across multiple blockchain networks.
+InheritNext is a full-stack DFINITY (Internet Computer) application for secure, automated inheritance management. It enables users to register assets, assign heirs, and automate asset distribution based on customizable rules and timers.
 
- This project aims to solve real-world issues like forgotten keys, lost wallets, and the lack of structured digital asset inheritance by offering a smart contract-based solution with advanced security, cross-chain compatibility, and user-centric features.
+## Architecture Diagram
 
- ---
+```mermaid
+flowchart TD
+    subgraph Frontend
+        A[User Dashboard]
+        B[AssetsList]
+        C[HeirsList]
+        D[AssetDistributionChart]
+        E[Timer & Notifications]
+    end
+    subgraph Backend
+        F[API Layer]
+        G[User Model]
+        H[Asset Model]
+        I[Heir Model]
+        J[Distribution Logic]
+        K[Timer Logic]
+    end
+    A --> F
+    B --> F
+    C --> F
+    D --> F
+    E --> F
+    F --> G
+    F --> H
+    F --> I
+    F --> J
+    F --> K
+    J --> H
+    J --> I
+    K --> J
+```
 
- ## 🚀 Features
+## Features
 
- - 🔐 **Smart Contract-Based Inheritance Logic**
- - 🧠 **Proof-of-Life Verification System**
- - 🔄 **Cross-Chain Asset Handling (Bitcoin, Ethereum, ICP, and more)**
- - 💼 **Multi-Signature & Time-Locked Transfers**
- - 🧾 **User Wallet Recovery Registration**
- - 🔒 **Zero-Knowledge & MFA Security**
- - 📊 **Scalable, Auditable, and Compliant**
+- User Authentication: Secure login and session management.
+- Asset Management: Add, view, update, and remove assets.
+- Heir Management: Add, view, update, and remove heirs.
+- Distribution Assignment: Assign asset distribution percentages to heirs.
+- Access Timer: Timer starts automatically when assets are added.
+- Auto Distribution: Assets are automatically distributed when timer expires.
+- Dashboard: Real-time overview of assets, heirs, timer status, and distribution warnings.
+- Error Handling: Robust handling of type mismatches, backend errors, and UI feedback.
+- Charts & Visualization: Asset distribution charts for clear visualization.
 
- ---
+## How It Works
 
- ## 🛠️ Local Development
+1. Login and access dashboard.
+2. Add assets and heirs.
+3. Assign distributions.
+4. Timer controls asset distribution.
+5. Auto distribution on timer expiry.
+6. Visualization and notifications.
 
- ### Install Dependencies
+## Tech Stack
 
- ```bash
- npm install
- ```
+- Frontend: React, TypeScript, Vite, Tailwind CSS
+- Backend: Rust (DFINITY canister), Candid interface
+- State Management: React Context, Hooks
+- API Communication: Candid calls via frontend API layer
 
- ### Start Local ICP Replica
+## Project Structure
 
- ```bash
- dfx start --background
- ```
+- `src/civ_backend/`: Rust canister backend, API logic, models
+- `src/civ_frontend/`: React frontend, pages, components, context, hooks
 
- ### Deploy Canisters
+## License
 
- ```bash
- dfx deploy
- ```
-
- ---
-
- ## 📚 Documentation
-
- - [Internet Computer Docs](https://internetcomputer.org/docs/current/)
- - [Rust Canister Development](https://internetcomputer.org/docs/current/developer-docs/backend/rust/)
- - [Candid Interface Guide](https://internetcomputer.org/docs/current/developer-docs/backend/candid/)
-
- ---
-
- ## 📦 Future Roadmap
-
- - [ ] Cross-chain bridge module (BTC, ETH, ICP)
- - [ ] Inheritance rule customization (multi-generation, asset splitting)
- - [ ] Legal compliance layer (AML/KYC, estate law)
- - [ ] Institutional-grade support
-
- ---
-
- ## 🧑‍💻 Contributing
-
- We’re just getting started! If you're interested in contributing, stay tuned as the repo evolves. PRs, issues, and ideas are all welcome.
-
- ---
-
- ## 📝 License
-
- BSD 3-Clause "New" or "Revised" License – feel free to use, modify, and build on top of this.Dont forget to Give credits tho :) happy developing
-
- ---
+MIT
