@@ -10,6 +10,17 @@ dotenv.config({ path: '../../.env' });
 export default defineConfig({
   build: {
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react')) return 'vendor_react';
+            if (id.includes('@dfinity')) return 'vendor_dfinitiy';
+            return 'vendor';
+          }
+        }
+      }
+    }
   },
   optimizeDeps: {
     esbuildOptions: {

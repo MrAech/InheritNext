@@ -1,6 +1,14 @@
 import { useState, useEffect } from "react";
+import { useAuth } from "@/context/AuthContext";
+import { pbkdf2Hex } from "@/lib/hash";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,7 +17,10 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter, DialogHeader, DialogTitle, DialogTrigger
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Edit,
@@ -19,18 +30,15 @@ import {
   Users,
   Heart,
   Phone,
-  Mail
+  Mail,
 } from "lucide-react";
+
 import { useToast } from "@/hooks/use-toast";
 
 interface Heir {
-  id: string;
   name: string;
-  relationship: string;
-  percentage: number;
-  email: string;
-  phone: string;
-  address: string;
+  gov_id_hash: string;
+  security_question_hash?: string;
 }
 
 interface HeirsListProps {
@@ -38,96 +46,158 @@ interface HeirsListProps {
 }
 
 const HeirsList = ({ onHeirsChange }: HeirsListProps = {}) => {
-  const [heirs, setHeirs] = useState<Heir[]>([
-    {
-      id: "1",
-      name: "Sarah Johnson",
-      relationship: "Daughter",
-      percentage: 40,
-      email: "sarah.johnson@email.com",
-      phone: "+1 (555) 123-4567",
-      address: "123 Oak Street, Beverly Hills, CA"
-    },
-    {
-      id: "2",
-      name: "Michael Johnson",
-      relationship: "Son",
-      percentage: 30,
-      email: "michael.johnson@email.com",
-      phone: "+1 (555) 234-5678",
-      address: "456 Pine Avenue, Los Angeles, CA"
-    },
-    {
-      id: "3",
-      name: "Emily Davis",
-      relationship: "Granddaughter",
-      percentage: 20,
-      email: "emily.davis@email.com",
-      phone: "+1 (555) 345-6789",
-      address: "789 Maple Drive, Santa Monica, CA"
-    },
-    {
-      id: "4",
-      name: "Children's Hospital Foundation",
-      relationship: "Charity",
-      percentage: 10,
-      email: "donations@childrenshospital.org",
-      phone: "+1 (555) 456-7890",
-      address: "321 Charity Lane, Los Angeles, CA"
-    }
-  ]);
+  const { actor } = useAuth();
+  const [heirs, setHeirs] = useState<Heir[]>([]);
+  const [loading, setLoading] = useState(false);
 
   const [editingHeir, setEditingHeir] = useState<Heir | null>(null);
   const [isAddingHeir, setIsAddingHeir] = useState(false);
   const { toast } = useToast();
 
-  // Initialize the parent component with heirs data
+  // Fetch heirs from canister on mount
   useEffect(() => {
-    onHeirsChange?.(heirs);
-  }, []);
+    if (!actor) return;
+    setLoading(true);
+    actor
+      .get_user_state()
+      .then((userState) => {
+        // actor returns opt UserState ([] | [UserState])
+        const us = userState.length > 0 ? userState[0] : null;
+        const heirListRaw = us ? us.heirs : [];
+        const heirList = heirListRaw.map((h) => ({
+          name: h.name,
+          gov_id_hash: h.gov_id_hash,
+          security_question_hash:
+            h.security_question_hash && h.security_question_hash.length > 0
+              ? h.security_question_hash[0]
+              : "",
+        }));
+        setHeirs(heirList);
+        onHeirsChange?.(heirList);
+        setLoading(false);
+      })
+      .catch((error) => {
+        console.error("Failed to fetch user state:", error);
+        setLoading(false);
+      });
 
-  const getTotalPercentage = () => {
-    return heirs.reduce((sum, heir) => sum + heir.percentage, 0);
+  }, [actor, onHeirsChange]);
+
+  const handleUpdateHeir = async (updatedHeir: Heir) => {
+    if (!actor) return;
+    setLoading(true);
+    try {
+      // Call canister update
+      await actor.update_heir(
+        updatedHeir.name,
+        updatedHeir.gov_id_hash,
+        updatedHeir.security_question_hash
+          ? [updatedHeir.security_question_hash]
+          : [],
+      );
+      setEditingHeir(null);
+      // Refetch
+      const userState = await actor.get_user_state();
+      const heirListRaw =
+        userState && userState.length > 0 ? userState[0].heirs : [];
+      const heirList = heirListRaw.map((h) => ({
+        name: h.name,
+        gov_id_hash: h.gov_id_hash,
+        security_question_hash:
+          h.security_question_hash && h.security_question_hash.length > 0
+            ? h.security_question_hash[0]
+            : "",
+      }));
+      setHeirs(heirList);
+      onHeirsChange?.(heirList);
+      toast({
+        title: "Heir Updated",
+        description: `${updatedHeir.name}'s information has been successfully updated.`,
+      });
+    } catch {
+      toast({
+        title: "Error",
+        description: "Failed to update heir.",
+        variant: "destructive",
+      });
+    }
+    setLoading(false);
   };
 
-  const handleUpdateHeir = (updatedHeir: Heir) => {
-    const newHeirs = heirs.map(heir =>
-      heir.id === updatedHeir.id ? updatedHeir : heir
-    );
-    setHeirs(newHeirs);
-    onHeirsChange?.(newHeirs);
-    setEditingHeir(null);
-    toast({
-      title: "Heir Updated",
-      description: `${updatedHeir.name}'s information has been successfully updated.`,
-    });
+  const handleRemoveHeir = async (name: string, gov_id_hash: string) => {
+    if (!actor) return;
+    setLoading(true);
+    try {
+      // Call canister remove
+      await actor.remove_heir(gov_id_hash);
+      // Refetch
+      const userState = await actor.get_user_state();
+      const heirListRaw =
+        userState && userState.length > 0 ? userState[0].heirs : [];
+      const heirList = heirListRaw.map((h) => ({
+        name: h.name,
+        gov_id_hash: h.gov_id_hash,
+        security_question_hash:
+          h.security_question_hash && h.security_question_hash.length > 0
+            ? h.security_question_hash[0]
+            : "",
+      }));
+      setHeirs(heirList);
+      onHeirsChange?.(heirList);
+      toast({
+        title: "Heir Removed",
+        description: `Heir has been removed from the beneficiaries.`,
+        variant: "destructive",
+      });
+    } catch {
+      toast({
+        title: "Error",
+        description: "Failed to remove heir.",
+        variant: "destructive",
+      });
+    }
+    setLoading(false);
   };
 
-  const handleRemoveHeir = (heirId: string) => {
-    const heirToRemove = heirs.find(h => h.id === heirId);
-    const newHeirs = heirs.filter(heir => heir.id !== heirId);
-    setHeirs(newHeirs);
-    onHeirsChange?.(newHeirs);
-    toast({
-      title: "Heir Removed",
-      description: `${heirToRemove?.name} has been removed from the beneficiaries.`,
-      variant: "destructive",
-    });
-  };
-
-  const handleAddHeir = (newHeir: Omit<Heir, 'id'>) => {
-    const heir: Heir = {
-      ...newHeir,
-      id: Date.now().toString()
-    };
-    const newHeirs = [...heirs, heir];
-    setHeirs(newHeirs);
-    onHeirsChange?.(newHeirs);
-    setIsAddingHeir(false);
-    toast({
-      title: "Heir Added",
-      description: `${heir.name} has been added as a beneficiary.`,
-    });
+  const handleAddHeir = async (
+    newHeir: Omit<Heir, "gov_id_hash"> & { gov_id_hash: string },
+  ) => {
+    if (!actor) return;
+    setLoading(true);
+    try {
+      // Call canister add_heir
+      await actor.add_heir(
+        newHeir.name,
+        newHeir.gov_id_hash,
+        newHeir.security_question_hash ? [newHeir.security_question_hash] : [],
+      );
+      setIsAddingHeir(false);
+      // Refetch
+      const userState = await actor.get_user_state();
+      const heirListRaw =
+        userState && userState.length > 0 ? userState[0].heirs : [];
+      const heirList = heirListRaw.map((h) => ({
+        name: h.name,
+        gov_id_hash: h.gov_id_hash,
+        security_question_hash:
+          h.security_question_hash && h.security_question_hash.length > 0
+            ? h.security_question_hash[0]
+            : "",
+      }));
+      setHeirs(heirList);
+      onHeirsChange?.(heirList);
+      toast({
+        title: "Heir Added",
+        description: `${newHeir.name} has been added as a beneficiary.`,
+      });
+    } catch {
+      toast({
+        title: "Error",
+        description: "Failed to add heir.",
+        variant: "destructive",
+      });
+    }
+    setLoading(false);
   };
 
   const getRelationshipIcon = (relationship: string) => {
@@ -158,38 +228,13 @@ const HeirsList = ({ onHeirsChange }: HeirsListProps = {}) => {
     }
   };
 
-  const totalPercentage = getTotalPercentage();
-  const isPercentageValid = totalPercentage === 100;
-
   return (
     <div className="space-y-6">
-      {/* Percentage Summary */}
-      <Card className="shadow-card">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>Inheritance Distribution</span>
-            <Badge
-              variant={isPercentageValid ? "secondary" : "destructive"}
-              className="text-sm"
-            >
-              {totalPercentage}% Total
-            </Badge>
-          </CardTitle>
-          <CardDescription>
-            {isPercentageValid
-              ? "Distribution is complete and balanced."
-              : `Distribution needs adjustment. ${totalPercentage > 100 ? 'Over' : 'Under'}-allocated by ${Math.abs(100 - totalPercentage)}%.`
-            }
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Progress value={totalPercentage} className="h-3" />
-        </CardContent>
-      </Card>
-
       {/* Controls */}
       <div className="flex justify-between items-center">
-        <p className="text-muted-foreground">Manage beneficiaries and their inheritance percentages</p>
+        <p className="text-muted-foreground">
+          Manage beneficiaries and their inheritance percentages
+        </p>
         <Dialog open={isAddingHeir} onOpenChange={setIsAddingHeir}>
           <DialogTrigger asChild>
             <Button size="sm" className="bg-gradient-success">
@@ -207,75 +252,69 @@ const HeirsList = ({ onHeirsChange }: HeirsListProps = {}) => {
       {/* Heirs List */}
       <div className="grid gap-4 md:grid-cols-2">
         {heirs.map((heir) => (
-          <Card key={heir.id} className="shadow-card hover:shadow-elegant transition-shadow">
+          <Card
+            key={heir.gov_id_hash}
+            className="shadow-card hover:shadow-elegant transition-shadow"
+          >
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between">
                 <div className="flex items-center space-x-3">
                   <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                    {getRelationshipIcon(heir.relationship)}
+                    <User className="w-5 h-5" />
                   </div>
                   <div>
                     <CardTitle className="text-lg">{heir.name}</CardTitle>
                     <CardDescription>
-                      <Badge
-                        variant="outline"
-                        className={getRelationshipColor(heir.relationship)}
-                      >
-                        {heir.relationship}
-                      </Badge>
+                      Gov ID Hash: {heir.gov_id_hash}
                     </CardDescription>
+                    {heir.security_question_hash && (
+                      <CardDescription>
+                        Security Q: {heir.security_question_hash}
+                      </CardDescription>
+                    )}
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-2xl font-bold text-primary">{heir.percentage}%</div>
-                  <div className="text-sm text-muted-foreground">inheritance</div>
-                </div>
+                <Badge variant="secondary">Heir</Badge>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Mail className="w-4 h-4" />
-                    {heir.email}
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Phone className="w-4 h-4" />
-                    {heir.phone}
-                  </div>
-                </div>
-                <div className="flex space-x-2">
-                  <Dialog open={editingHeir?.id === heir.id} onOpenChange={(open) => !open && setEditingHeir(null)}>
-                    <DialogTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => setEditingHeir(heir)}
-                      >
-                        <Edit className="w-4 h-4 mr-2" />
-                        Update
-                      </Button>
-                    </DialogTrigger>
-                    {editingHeir && (
-                      <HeirFormDialog
-                        heir={editingHeir}
-                        onSubmit={handleUpdateHeir}
-                        onCancel={() => setEditingHeir(null)}
-                        isEditing
-                      />
-                    )}
-                  </Dialog>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                    onClick={() => handleRemoveHeir(heir.id)}
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Remove
-                  </Button>
-                </div>
+              <div className="flex space-x-2">
+                <Dialog
+                  open={
+                    editingHeir?.name === heir.name &&
+                    editingHeir?.gov_id_hash === heir.gov_id_hash
+                  }
+                  onOpenChange={(open) => !open && setEditingHeir(null)}
+                >
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => setEditingHeir(heir)}
+                    >
+                      <Edit className="w-4 h-4 mr-2" />
+                      Update
+                    </Button>
+                  </DialogTrigger>
+                  {editingHeir && (
+                    <HeirFormDialog
+                      heir={editingHeir}
+                      onSubmit={handleUpdateHeir}
+                      onCancel={() => setEditingHeir(null)}
+                      isEditing
+                    />
+                  )}
+                </Dialog>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                  onClick={() => handleRemoveHeir(heir.name, heir.gov_id_hash)}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Remove
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -287,20 +326,31 @@ const HeirsList = ({ onHeirsChange }: HeirsListProps = {}) => {
 
 interface HeirFormDialogProps {
   heir?: Heir;
-  onSubmit: (heir: Heir | Omit<Heir, 'id'>) => void;
+  onSubmit: (heir: Heir | Omit<Heir, "id">) => void;
   onCancel: () => void;
   isEditing?: boolean;
 }
 
-const HeirFormDialog = ({ heir, onSubmit, onCancel, isEditing = false }: HeirFormDialogProps) => {
+const HeirFormDialog = ({
+  heir,
+  onSubmit,
+  onCancel,
+  isEditing = false,
+}: HeirFormDialogProps) => {
+  const { identity, actor } = useAuth();
   const [formData, setFormData] = useState({
     name: heir?.name || "",
-    relationship: heir?.relationship || "",
-    percentage: heir?.percentage || 0,
-    email: heir?.email || "",
-    phone: heir?.phone || "",
-    address: heir?.address || ""
+    // keep gov_id_hash as computed and hidden; prefill when editing
+    gov_id_hash: heir?.gov_id_hash || "",
+    security_question_hash: heir?.security_question_hash || "",
   });
+  const [rawGovId, setRawGovId] = useState("");
+  const [maskedGovPreview, setMaskedGovPreview] = useState(
+    heir?.gov_id_hash
+      ? `${heir?.gov_id_hash.slice(0, 6)}...${heir?.gov_id_hash.slice(-4)}`
+      : "",
+  );
+  const APP_PEPPER = "inheritnext-pepper-v1";
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -314,11 +364,11 @@ const HeirFormDialog = ({ heir, onSubmit, onCancel, isEditing = false }: HeirFor
   return (
     <DialogContent className="sm:max-w-md max-h-[80vh] overflow-y-auto">
       <DialogHeader>
-        <DialogTitle>
-          {isEditing ? "Update Heir" : "Add New Heir"}
-        </DialogTitle>
+        <DialogTitle>{isEditing ? "Update Heir" : "Add New Heir"}</DialogTitle>
         <DialogDescription>
-          {isEditing ? "Modify the heir details below." : "Enter the details for the new beneficiary."}
+          {isEditing
+            ? "Modify the heir details below."
+            : "Enter the details for the new beneficiary."}
         </DialogDescription>
       </DialogHeader>
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -327,70 +377,81 @@ const HeirFormDialog = ({ heir, onSubmit, onCancel, isEditing = false }: HeirFor
           <Input
             id="name"
             value={formData.name}
-            onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, name: e.target.value }))
+            }
             placeholder="Enter full name"
             required
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="relationship">Relationship</Label>
+          <Label htmlFor="gov_id_raw">Government ID</Label>
           <Input
-            id="relationship"
-            value={formData.relationship}
-            onChange={(e) => setFormData(prev => ({ ...prev, relationship: e.target.value }))}
-            placeholder="e.g., Son, Daughter, Spouse, Charity"
-            required
+            id="gov_id_raw"
+            value={rawGovId}
+            onChange={(e) => setRawGovId(e.target.value)}
+            placeholder="Enter government ID (kept private)"
+            required={!isEditing}
           />
+          {maskedGovPreview && (
+            <div className="text-sm text-muted-foreground">
+              Preview Hash: {maskedGovPreview}
+            </div>
+          )}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="percentage">Inheritance Percentage (%)</Label>
+          <Label htmlFor="security_question_hash">Security Question Hash</Label>
           <Input
-            id="percentage"
-            type="number"
-            min="0"
-            max="100"
-            value={formData.percentage}
-            onChange={(e) => setFormData(prev => ({ ...prev, percentage: Number(e.target.value) }))}
-            placeholder="Enter percentage"
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="email">Email Address</Label>
-          <Input
-            id="email"
-            type="email"
-            value={formData.email}
-            onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-            placeholder="Enter email address"
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="phone">Phone Number</Label>
-          <Input
-            id="phone"
-            value={formData.phone}
-            onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-            placeholder="Enter phone number"
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="address">Address</Label>
-          <Input
-            id="address"
-            value={formData.address}
-            onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
-            placeholder="Enter full address"
-            required
+            id="security_question_hash"
+            value={formData.security_question_hash}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                security_question_hash: e.target.value,
+              }))
+            }
+            placeholder="Enter security question hash (optional)"
           />
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onCancel}>
             Cancel
           </Button>
-          <Button type="submit" className="bg-gradient-primary">
+          <Button
+            type="submit"
+            className="bg-gradient-primary"
+            onClick={async (ev) => {
+              ev.preventDefault();
+              // compute gov_id_hash if raw provided
+              let computed = formData.gov_id_hash;
+              if (rawGovId && rawGovId.length > 0) {
+                // obtain per-user salt from canister; fallback to APP_PEPPER
+                let salt = APP_PEPPER;
+                try {
+                  const s = await actor.get_user_salt();
+                  if (s) salt = s as unknown as string;
+                } catch (e) {
+                  // ignore and use APP_PEPPER as fallback
+                }
+                computed = await pbkdf2Hex(
+                  rawGovId.trim().toLowerCase(),
+                  salt,
+                  100_000,
+                  32,
+                );
+                setFormData((prev) => ({ ...prev, gov_id_hash: computed }));
+                setMaskedGovPreview(
+                  `${computed.slice(0, 6)}...${computed.slice(-4)}`,
+                );
+              }
+              // submit using updated formData
+              if (isEditing && heir) {
+                onSubmit({ ...heir, ...formData, gov_id_hash: computed });
+              } else {
+                onSubmit({ ...formData, gov_id_hash: computed });
+              }
+            }}
+          >
             {isEditing ? "Update Heir" : "Add Heir"}
           </Button>
         </DialogFooter>

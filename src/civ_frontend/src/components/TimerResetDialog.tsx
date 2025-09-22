@@ -5,7 +5,7 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 
@@ -15,7 +15,11 @@ interface TimerResetDialogProps {
   onConfirm: () => void;
 }
 
-const TimerResetDialog = ({ open, onOpenChange, onConfirm }: TimerResetDialogProps) => {
+const TimerResetDialog = ({
+  open,
+  onOpenChange,
+  onConfirm,
+}: TimerResetDialogProps) => {
   const handleConfirm = () => {
     onConfirm();
     onOpenChange(false);
@@ -34,22 +38,17 @@ const TimerResetDialog = ({ open, onOpenChange, onConfirm }: TimerResetDialogPro
               <AlertTriangle className="w-4 h-4 text-warning mt-0.5 flex-shrink-0" />
               <span>
                 This action will reset the dashboard timer to the current time.
-                This operation cannot be undone and will update the "Last reset" timestamp.
+                This operation cannot be undone and will update the "Last reset"
+                timestamp.
               </span>
             </div>
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="flex gap-2 sm:gap-0">
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-          >
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button
-            onClick={handleConfirm}
-            className="bg-gradient-primary"
-          >
+          <Button onClick={handleConfirm} className="bg-gradient-primary">
             <RefreshCw className="w-4 h-4 mr-2" />
             Reset Timer
           </Button>

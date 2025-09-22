@@ -1,87 +1,112 @@
+
+type PlanType = variant { Basic; Tier1; Custom };
+
+type UserPrincipal = principal;
+
+type UserProfile = record {
+  user_principal: UserPrincipal;
+  name: text;
+  gov_id_hash: text;
+  pbkdf2_salt: text;
+  terms_accepted: bool;
+  plan_type: PlanType;
+  activated: bool;
+  activation_timestamp: opt nat64;
+  expiry_timer: opt nat64;
+  warning_days: nat64;
+  inactivity_days: nat64;
+};
+
+
 type Asset = record {
-  id: nat64;
-  updated_at: nat64;
+  asset_id: text;
   asset_type: text;
+  approved: bool;
   value: nat64;
   name: text;
   description: text;
-  created_at: nat64;
-};
-
-type AssetInput = record {
-  id: nat64;
-  asset_type: text;
-  value: nat64;
-  name: text;
-  description: text;
-};
-
-type AssetDistribution = record {
-  heir_id: nat64;
-  asset_id: nat64;
-  percentage: nat8;
-};
-
-type CivError = variant {
-  AssetNotFound;
-  InvalidHeirPercentage;
-  AssetExists;
-  HeirExists;
-  DistributionAssetNotFound;
-  DistributionHeirNotFound;
-  HeirNotFound;
-  Other: text;
-  UserNotFound;
 };
 
 type Heir = record {
-  id: nat64;
-  updated_at: nat64;
-  relationship: text;
   name: text;
-  created_at: nat64;
-  email: text;
-  address: text;
-  phone: text;
+  gov_id_hash: text;
+  security_question_hash: opt text;
 };
 
-type HeirInput = record {
-  id: nat64;
-  relationship: text;
-  name: text;
-  email: text;
-  address: text;
-  phone: text;
+type Distribution = record {
+  asset_id: text;
+  heir_name: text;
+  heir_gov_id: text;
+  percent: nat8;
 };
 
-type Result = variant {
-  Ok;
-  Err: CivError;
+type AssetApproval = record {
+  owner: principal;
+  asset_type: text;
+  token_canister: principal;
+  approved_amount: nat64;
+  approval_expiry: opt nat64;
+  auto_renew: bool;
 };
 
-type User = record {
-  timer: nat64;
-  heirs: vec Heir;
+type VaultedNFT = record {
+  owner: principal;
+  collection_canister: principal;
+  token_id: text;
+  assigned_heir_hash: text;
+};
+
+type UserState = record {
+  profile: UserProfile;
   assets: vec Asset;
-  user: text;
-  distributions: vec AssetDistribution;
+  heirs: vec Heir;
+  distributions: vec Distribution;
+  approvals: vec AssetApproval;
+  vaulted_nfts: vec VaultedNFT;
+};
+
+type CustodianError = variant {
+  NotAuthorized;
+  NotFound;
+  InvalidInput;
+  DistributionInvalid;
+  AlreadyExists;
+  NotActivated;
+  NotApproved;
+  Other: text;
 };
 
 service : {
-  __get_candid_interface_tmp_hack: () -> (text) query;
-  add_asset: (AssetInput) -> (Result);
-  add_heir: (HeirInput) -> (Result);
-  assign_distributions: (vec AssetDistribution) -> (Result);
-  get_distribution: () -> (vec record { text; nat64 }) query;
-  get_timer: () -> (nat64) query;
-  get_user: () -> (opt User) query;
-  list_assets: () -> (vec Asset) query;
-  list_heirs: () -> (vec Heir) query;
-  remove_asset: (nat64) -> (Result);
-  remove_heir: (nat64) -> (Result);
-  reset_timer: () -> (Result);
-  update_asset: (nat64, AssetInput) -> (Result);
-  update_heir: (nat64, HeirInput) -> (Result);
+  accept_terms: () -> (variant { Ok; Err: CustodianError });
+  select_plan: (PlanType) -> (variant { Ok; Err: CustodianError });
+  add_asset: (record {
+    asset_id: text;
+    asset_type: text;
+    name: text;
+    value: nat64;
+    description: text;
+    approved: bool;
+  }) -> (variant { Ok; Err: CustodianError });
+  add_heir: (text, text, opt text) -> (variant { Ok; Err: CustodianError });
+  update_heir: (text, text, opt text) -> (variant { Ok; Err: CustodianError });
+  remove_heir: (text) -> (variant { Ok; Err: CustodianError });
+  assign_distribution: (text, text, nat32) -> (variant { Ok; Err: CustodianError });
+  set_distributions_for_asset: (text, vec record { heir_gov_id: text; percent: nat32 }) -> (variant { Ok; Err: CustodianError });
+  remove_distribution: (text, text) -> (variant { Ok; Err: CustodianError });
+  update_asset: (text, text, text, nat64, text, bool) -> (variant { Ok; Err: CustodianError });
+  remove_asset: (text) -> (variant { Ok; Err: CustodianError });
+  set_ledger_for_asset_type: (text, opt principal) -> (variant { Ok; Err: CustodianError });
+  record_token_approval: (principal, text, nat64, opt nat64, bool) -> (variant { Ok; Err: CustodianError });
+  register_vaulted_nft: (principal, text, text) -> (variant { Ok; Err: CustodianError });
+  activate_plan: () -> (variant { Ok; Err: CustodianError });
+  claim_asset: (text, text) -> (variant { Ok; Err: CustodianError });
+  heir_claim_asset: (principal, text, text, opt text) -> (variant { Ok; Err: CustodianError });
+  // Return the per-user PBKDF2 salt (query) and rotate it (update)
+  get_user_salt: () -> (opt text) query;
+  rotate_user_salt: () -> (variant { Ok: text; Err: CustodianError });
+  trigger_collection: () -> (variant { Ok; Err: CustodianError });
+  get_user_state: () -> (opt UserState) query;
+  get_ledger_decimals: (text) -> (opt nat8) query;
 };
 
 

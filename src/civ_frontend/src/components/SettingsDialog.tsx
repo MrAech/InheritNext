@@ -1,13 +1,25 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Settings, Palette, DollarSign } from "lucide-react";
 import { useSettings, Theme, Currency } from "@/context/SettingsContext";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
 import {
   Dialog,
-  DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 
 const SettingsDialog = () => {
@@ -16,6 +28,19 @@ const SettingsDialog = () => {
   const [tempTheme, setTempTheme] = useState<Theme>(theme);
   const [tempCurrency, setTempCurrency] = useState<Currency>(currency);
   const { toast } = useToast();
+  const { actor } = useAuth();
+
+  const handleRotateSalt = async () => {
+    if (!actor) return;
+    if (!confirm("Rotating your salt will invalidate previously-derived heir hashes. Are you sure?")) return;
+    try {
+      const newSalt = await actor.rotate_user_salt();
+      toast({ title: "Salt Rotated", description: "Your per-user salt was rotated. You must re-register heirs or update derived hashes." });
+      console.log("new salt:", newSalt);
+    } catch (e) {
+      toast({ title: "Error", description: "Failed to rotate salt.", variant: "destructive" });
+    }
+  };
 
   const handleSave = () => {
     setTheme(tempTheme);
@@ -55,7 +80,10 @@ const SettingsDialog = () => {
               <Palette className="w-4 h-4" />
               Theme
             </Label>
-            <Select value={tempTheme} onValueChange={(value) => setTempTheme(value as Theme)}>
+            <Select
+              value={tempTheme}
+              onValueChange={(value) => setTempTheme(value as Theme)}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select theme" />
               </SelectTrigger>
@@ -72,7 +100,10 @@ const SettingsDialog = () => {
               <DollarSign className="w-4 h-4" />
               Currency
             </Label>
-            <Select value={tempCurrency} onValueChange={(value) => setTempCurrency(value as Currency)}>
+            <Select
+              value={tempCurrency}
+              onValueChange={(value) => setTempCurrency(value as Currency)}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select currency" />
               </SelectTrigger>
@@ -83,16 +114,33 @@ const SettingsDialog = () => {
                 <SelectItem value="GBP">GBP - British Pound (£)</SelectItem>
                 <SelectItem value="JPY">JPY - Japanese Yen (¥)</SelectItem>
                 <SelectItem value="CAD">CAD - Canadian Dollar (C$)</SelectItem>
-                <SelectItem value="AUD">AUD - Australian Dollar (A$)</SelectItem>
+                <SelectItem value="AUD">
+                  AUD - Australian Dollar (A$)
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
+          <div className="space-y-2">
+            <Label>Security / Salt Rotation</Label>
+            <div className="flex items-center gap-2">
+              <Button variant="destructive" size="sm" onClick={handleRotateSalt}>
+                Rotate My Salt
+              </Button>
+              <div className="text-sm text-muted-foreground">Rotating salt invalidates previously-registered heirs derived from the old salt.</div>
+            </div>
+          </div>
         </div>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={handleCancel}>
-
-          </Button>
-          <Button type="submit" onClick={handleSave} className="bg-gradient-primary">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleCancel}
+          ></Button>
+          <Button
+            type="submit"
+            onClick={handleSave}
+            className="bg-gradient-primary"
+          >
             Save Changes
           </Button>
         </DialogFooter>

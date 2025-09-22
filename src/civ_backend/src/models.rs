@@ -1,78 +1,111 @@
-use candid::{CandidType, Deserialize};
 
+use candid::{CandidType, Deserialize, Principal};
+
+#[derive(Clone, CandidType, Deserialize)]
+pub struct UserProfile {
+    pub principal: Principal,
+    pub name: String,
+    pub gov_id_hash: String,
+    pub pbkdf2_salt: String,
+    pub terms_accepted: bool,
+    pub plan_type: PlanType,
+    pub activated: bool,
+    pub activation_timestamp: Option<u64>,
+    pub expiry_timer: Option<u64>,
+    pub warning_days: u64,
+    pub inactivity_days: u64,
+}
+
+#[derive(Clone, CandidType, Deserialize)]
+pub enum PlanType {
+    Basic,
+    Tier1,
+    Custom,
+}
 
 #[derive(Clone, CandidType, Deserialize)]
 pub struct Asset {
-    pub id: u64,
-    pub name: String,
-    pub asset_type: String,
+    pub asset_id: String, // ICRC-1/2/37 asset id
+    pub asset_type: String, // e.g. "ckBTC", "ckETH", "NFT"
+    pub approved: bool,
     pub value: u64,
-    pub description: String,
-    pub created_at: u64,
-    pub updated_at: u64,
-}
-#[derive(Clone, CandidType, Deserialize)]
-pub struct AssetInput {
-    pub id: u64,
     pub name: String,
-    pub asset_type: String,
-    pub value: u64,
     pub description: String,
 }
-
-
-#[derive(Clone, CandidType, Deserialize)]
-pub struct HeirInput {
-    pub id: u64,
-    pub name: String,
-    pub relationship: String,
-    pub email: String,
-    pub phone: String,
-    pub address: String,
-}
-
-
-#[derive(Clone, CandidType, Deserialize)]
-pub struct AssetDistribution {
-    pub asset_id: u64,
-    pub heir_id: u64,
-    pub percentage: u8,
-}
-
 
 #[derive(Clone, CandidType, Deserialize)]
 pub struct Heir {
-    pub id: u64,
     pub name: String,
-    pub relationship: String,
-    pub email: String,
-    pub phone: String,
-    pub address: String,
+    pub gov_id_hash: String,
+    pub security_question_hash: Option<String>,
+}
+
+#[derive(Clone, CandidType, Deserialize)]
+pub struct Distribution {
+    pub asset_id: String,
+    pub heir_name: String,
+    pub heir_gov_id: String,
+    pub percent: u32,
+}
+
+#[derive(Clone, CandidType, Deserialize)]
+pub struct UserState {
+    pub profile: UserProfile,
+    pub assets: Vec<Asset>,
+    pub heirs: Vec<Heir>,
+    pub distributions: Vec<Distribution>,
+    // New: approvals for fungible tokens
+    pub approvals: Vec<AssetApproval>,
+    // New: vaulted NFTs owned by this user (transferred into custodian vault)
+    pub vaulted_nfts: Vec<VaultedNFT>,
+}
+
+#[derive(Clone, CandidType, Deserialize)]
+pub struct AssetApproval {
+    pub owner: Principal,
+    pub asset_type: String,
+    pub token_canister: Principal,
+    pub approved_amount: u64,
+    pub approval_expiry: Option<u64>,
+    pub auto_renew: bool,
+}
+
+#[derive(Clone, CandidType, Deserialize)]
+pub struct VaultedNFT {
+    pub owner: Principal,
+    pub collection_canister: Principal,
+    pub token_id: String,
+    pub assigned_heir_hash: String,
+}
+
+#[derive(Clone, CandidType, Deserialize)]
+pub enum JournalStatus {
+    Pending,
+    Success,
+    Failed,
+}
+
+#[derive(Clone, CandidType, Deserialize)]
+pub struct JournalEntry {
+    pub id: u64,
+    pub asset_id: String,
+    pub action: String,
+    pub details: String, // JSON or text-encoded details for later decoding
+    pub status: JournalStatus,
+    pub attempts: u32,
     pub created_at: u64,
     pub updated_at: u64,
 }
 
-
-#[derive(Clone, CandidType, Deserialize)]
-pub struct User {
-    pub user: String,
-    pub assets: Vec<Asset>,
-    pub heirs: Vec<Heir>,
-    pub distributions: Vec<AssetDistribution>,
-    pub timer: u64,
-}
-
-
 #[derive(CandidType, Deserialize)]
-pub enum CivError {
-    AssetExists,
-    AssetNotFound,
-    HeirExists,
-    HeirNotFound,
-    UserNotFound,
-    InvalidHeirPercentage,
+pub enum CustodianError {
+    NotAuthorized,
+    NotFound,
+    InvalidInput,
+    DistributionInvalid,
+    AlreadyExists,
+    NotActivated,
+    NotApproved,
     Other(String),
-    DistributionAssetNotFound,
-    DistributionHeirNotFound,
 }
 

@@ -1,9 +1,22 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Share2, Plus, Trash2 } from "lucide-react";
@@ -16,7 +29,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger
+  DialogTrigger,
 } from "@/components/ui/dialog";
 
 interface Asset {
@@ -26,7 +39,7 @@ interface Asset {
 }
 
 interface Heir {
-  id: string;
+  id: string; // gov_id_hash
   name: string;
 }
 
@@ -49,21 +62,58 @@ const AssetDistribution = ({ assets, heirs }: AssetDistributionProps) => {
   const [selectedHeir, setSelectedHeir] = useState("");
   const [percentageInput, setPercentageInput] = useState("");
   const { toast } = useToast();
+  const { actor } = useAuth();
 
-  const handleAddDistribution = () => {
+  const fetchDistributionsFromCanister = async () => {
+    if (!actor) return;
+    try {
+      const userState = await actor.get_user_state();
+      const state = userState.length > 0 ? userState[0] : null;
+      if (!state) return;
+      // Map backend distributions to local shape
+      const mapped = state.distributions.map((d: any, idx: number) => ({
+        id: `${d.asset_id}-${d.heir_gov_id}-${idx}`,
+        assetId: d.asset_id,
+        heirId: d.heir_gov_id,
+        percentage:
+          typeof d.percent === "number" ? d.percent : Number(d.percent),
+      }));
+      setDistributions(mapped);
+    } catch (e) {
+      console.error("Failed to fetch distributions", e);
+    }
+  };
+
+  useEffect(() => {
+    fetchDistributionsFromCanister();
+    // eslint-disable-next-line
+  }, [actor]);
+
+  const handleAddDistribution = async () => {
     const percentage = Number(percentageInput);
 
-    if (!selectedAsset || !selectedHeir || !percentageInput || percentage <= 0) {
+    if (
+      !selectedAsset ||
+      !selectedHeir ||
+      !percentageInput ||
+      percentage <= 0
+    ) {
       toast({
         title: "Invalid input",
-        description: "Please select an asset, heir, and enter a valid percentage.",
+        description:
+          "Please select an asset, heir, and enter a valid percentage.",
         variant: "destructive",
       });
       return;
     }
 
-    const existingAssetDistributions = distributions.filter(d => d.assetId === selectedAsset);
-    const totalPercentage = existingAssetDistributions.reduce((sum, d) => sum + d.percentage, 0);
+    const existingAssetDistributions = distributions.filter(
+      (d) => d.assetId === selectedAsset,
+    );
+    const totalPercentage = existingAssetDistributions.reduce(
+      (sum, d) => sum + d.percentage,
+      0,
+    );
 
     if (totalPercentage + percentage > 100) {
       toast({
@@ -78,10 +128,44 @@ const AssetDistribution = ({ assets, heirs }: AssetDistributionProps) => {
       id: Date.now().toString(),
       assetId: selectedAsset,
       heirId: selectedHeir,
-      percentage
+      percentage,
     };
 
+    // Stage locally first
     setDistributions([...distributions, newDistribution]);
+    // If canister actor available and the asset now totals 100%, commit atomically
+    const updatedForAsset = [...existingAssetDistributions, newDistribution];
+    const newTotal = updatedForAsset.reduce((s, d) => s + d.percentage, 0);
+    if (actor && newTotal === 100) {
+      try {
+      // Prepare array of objects { heir_gov_id, percent }
+      const payload = updatedForAsset.map(
+        (d) => ({ heir_gov_id: d.heirId, percent: d.percentage }),
+      );
+      // call new atomic endpoint
+      if ('set_distributions_for_asset' in actor) {
+        const res = await actor.set_distributions_for_asset(
+          selectedAsset,
+          payload,
+        );
+      } else {
+        throw new Error('Actor does not support set_distributions_for_asset method');
+      }
+      // Refresh authoritative distributions
+      await fetchDistributionsFromCanister();
+      } catch (e) {
+        console.error("Failed to persist bulk distributions", e);
+        toast({
+          title: "Error",
+          description:
+            "Failed to persist distributions to canister. Reverting local change.",
+          variant: "destructive",
+        });
+        // revert local state
+        await fetchDistributionsFromCanister();
+        return;
+      }
+    }
     setSelectedAsset("");
     setSelectedHeir("");
     setPercentageInput("");
@@ -97,31 +181,130 @@ const AssetDistribution = ({ assets, heirs }: AssetDistributionProps) => {
     const value = e.target.value;
 
     // Allow empty string or valid numbers
-    if (value === "" || (!isNaN(Number(value)) && Number(value) >= 0 && Number(value) <= 100)) {
+    if (
+      value === "" ||
+      (!isNaN(Number(value)) && Number(value) >= 0 && Number(value) <= 100)
+    ) {
       setPercentageInput(value);
     }
   };
 
-  const handleRemoveDistribution = (distributionId: string) => {
-    setDistributions(distributions.filter(d => d.id !== distributionId));
-    toast({
-      title: "Distribution removed",
-      description: "Asset distribution has been removed.",
-    });
+  const handleRemoveDistribution = async (distributionId: string) => {
+    const dist = distributions.find((d) => d.id === distributionId);
+    if (!dist) return;
+    // Stage removal locally first
+    setDistributions(distributions.filter((d) => d.id !== distributionId));
+    // If actor available and remaining distributions for asset sum to 100 (or 0), commit via bulk setter or remove_distribution
+    const remainingForAsset = distributions.filter(
+      (d) => d.assetId === dist.assetId && d.id !== distributionId,
+    );
+    const totalRemaining = remainingForAsset.reduce(
+      (s, d) => s + d.percentage,
+      0,
+    );
+    if (actor) {
+      try {
+        if (totalRemaining === 0) {
+          // no distributions remain for this asset; call remove for that heir (keep compatibility)
+          await actor.remove_distribution(dist.assetId, dist.heirId);
+        } else if (totalRemaining === 100) {
+          // commit remaining set atomically
+          const payload = remainingForAsset.map(
+            (d) => ({ heir_gov_id: d.heirId, percent: d.percentage }),
+          );
+          await (actor as any).set_distributions_for_asset(
+            dist.assetId,
+            payload,
+          );
+        } else {
+          // Not an atomic-safe state — refresh authoritative state to avoid leaving a transient invalid state
+          await fetchDistributionsFromCanister();
+          toast({
+            title: "Partial change",
+            description:
+              "Change staged locally. Please save full asset distribution to commit.",
+            variant: "default",
+          });
+          return;
+        }
+        toast({
+          title: "Removed",
+          description: "Distribution change committed.",
+        });
+        await fetchDistributionsFromCanister();
+      } catch (e) {
+        console.error(e);
+        toast({
+          title: "Error",
+          description: "Failed to persist removal to canister.",
+          variant: "destructive",
+        });
+        await fetchDistributionsFromCanister();
+      }
+    } else {
+      toast({
+        title: "Distribution removed",
+        description: "Asset distribution has been removed locally.",
+      });
+    }
+  };
+
+  // Commit handler for a whole asset (Save button)
+  const handleSaveAssetDistributions = async (assetId: string) => {
+    const staged = distributions.filter((d) => d.assetId === assetId);
+    const total = staged.reduce((s, d) => s + d.percentage, 0);
+    if (total !== 100) {
+      toast({
+        title: "Invalid total",
+        description: "Total distribution must equal 100% before saving.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!actor) {
+      toast({
+        title: "No canister",
+        description:
+          "No actor available; distributions are saved locally only.",
+      });
+      return;
+    }
+    try {
+      const payload = staged.map(
+        (d) => ({ heir_gov_id: d.heirId, percent: d.percentage }),
+      );
+      await (actor as any).set_distributions_for_asset(assetId, payload);
+      await fetchDistributionsFromCanister();
+      toast({
+        title: "Saved",
+        description: "Distributions saved to canister.",
+      });
+    } catch (e) {
+      console.error(e);
+      toast({
+        title: "Error",
+        description: "Failed to save distributions to canister.",
+        variant: "destructive",
+      });
+      await fetchDistributionsFromCanister();
+    }
   };
 
   const getAssetDistributions = (assetId: string) => {
-    return distributions.filter(d => d.assetId === assetId);
+    return distributions.filter((d) => d.assetId === assetId);
   };
 
   const getDistributionTotal = (assetId: string) => {
-    return getAssetDistributions(assetId).reduce((sum, d) => sum + d.percentage, 0);
+    return getAssetDistributions(assetId).reduce(
+      (sum, d) => sum + d.percentage,
+      0,
+    );
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
@@ -132,7 +315,9 @@ const AssetDistribution = ({ assets, heirs }: AssetDistributionProps) => {
       <div className="flex justify-between items-center">
         <div>
           <h3 className="text-lg font-semibold">Asset Distribution to Heirs</h3>
-          <p className="text-muted-foreground">Define how each asset will be distributed among heirs</p>
+          <p className="text-muted-foreground">
+            Define how each asset will be distributed among heirs
+          </p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
@@ -191,9 +376,22 @@ const AssetDistribution = ({ assets, heirs }: AssetDistributionProps) => {
                   placeholder="Enter percentage"
                 />
                 {selectedAsset && (
-                  <p className="text-xs text-muted-foreground">
-                    Remaining: {100 - getDistributionTotal(selectedAsset)}%
-                  </p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground">
+                      Remaining: {100 - getDistributionTotal(selectedAsset)}%
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const remaining =
+                          100 - getDistributionTotal(selectedAsset);
+                        setPercentageInput(String(remaining));
+                      }}
+                    >
+                      Auto-fill remaining
+                    </Button>
+                  </div>
                 )}
               </div>
             </div>
@@ -201,7 +399,10 @@ const AssetDistribution = ({ assets, heirs }: AssetDistributionProps) => {
               <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleAddDistribution} className="bg-gradient-primary">
+              <Button
+                onClick={handleAddDistribution}
+                className="bg-gradient-primary"
+              >
                 Add Distribution
               </Button>
             </DialogFooter>
@@ -225,9 +426,19 @@ const AssetDistribution = ({ assets, heirs }: AssetDistributionProps) => {
                       Total Value: {formatCurrency(asset.value)}
                     </CardDescription>
                   </div>
-                  <Badge variant={isComplete ? "secondary" : "destructive"}>
-                    {totalDistributed}% Distributed
-                  </Badge>
+                  <div className="flex items-center gap-3">
+                    <Badge variant={isComplete ? "secondary" : "destructive"}>
+                      {totalDistributed}% Distributed
+                    </Badge>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleSaveAssetDistributions(asset.id)}
+                      disabled={totalDistributed !== 100}
+                    >
+                      Save
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -237,24 +448,33 @@ const AssetDistribution = ({ assets, heirs }: AssetDistributionProps) => {
                     {assetDistributions.length > 0 ? (
                       <div className="space-y-3">
                         {assetDistributions.map((distribution) => {
-                          const heir = heirs.find(h => h.id === distribution.heirId);
-                          const inheritanceValue = (asset.value * distribution.percentage) / 100;
+                          const heir = heirs.find(
+                            (h) => h.id === distribution.heirId,
+                          );
+                          const inheritanceValue =
+                            (asset.value * distribution.percentage) / 100;
 
                           return (
-                            <div key={distribution.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                            <div
+                              key={distribution.id}
+                              className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
+                            >
                               <div className="flex items-center gap-3">
                                 <Share2 className="w-4 h-4 text-primary" />
                                 <div>
                                   <p className="font-medium">{heir?.name}</p>
                                   <p className="text-sm text-muted-foreground">
-                                    {distribution.percentage}% • {formatCurrency(inheritanceValue)}
+                                    {distribution.percentage}% •{" "}
+                                    {formatCurrency(inheritanceValue)}
                                   </p>
                                 </div>
                               </div>
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleRemoveDistribution(distribution.id)}
+                                onClick={() =>
+                                  handleRemoveDistribution(distribution.id)
+                                }
                                 className="text-destructive hover:bg-destructive hover:text-destructive-foreground"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -266,7 +486,8 @@ const AssetDistribution = ({ assets, heirs }: AssetDistributionProps) => {
                           <div className="text-center py-2">
                             <Separator className="mb-2" />
                             <p className="text-sm text-muted-foreground">
-                              {100 - totalDistributed}% remaining to be distributed
+                              {100 - totalDistributed}% remaining to be
+                              distributed
                             </p>
                           </div>
                         )}
@@ -275,7 +496,9 @@ const AssetDistribution = ({ assets, heirs }: AssetDistributionProps) => {
                       <div className="text-center py-6 text-muted-foreground">
                         <Share2 className="w-12 h-12 mx-auto mb-2 opacity-50" />
                         <p>No distributions set for this asset</p>
-                        <p className="text-sm">Use the "Add Distribution" button to get started</p>
+                        <p className="text-sm">
+                          Use the "Add Distribution" button to get started
+                        </p>
                       </div>
                     )}
                   </div>

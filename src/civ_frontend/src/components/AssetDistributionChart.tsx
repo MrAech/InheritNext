@@ -1,4 +1,3 @@
-
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from "recharts";
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
 
@@ -34,32 +33,45 @@ const COLORS = [
   "hsl(var(--chart-5))",
 ];
 
-const AssetDistributionChart = ({ asset, heirs, distributions }: AssetDistributionChartProps) => {
-  const assetDistributions = distributions.filter(d => d.assetId === asset.id);
-  const totalDistributed = assetDistributions.reduce((sum, d) => sum + d.percentage, 0);
+const AssetDistributionChart = ({
+  asset,
+  heirs,
+  distributions,
+}: AssetDistributionChartProps) => {
+  const assetDistributions = distributions.filter(
+    (d) => d.assetId === asset.id,
+  );
+  const totalDistributed = assetDistributions.reduce(
+    (sum, d) => sum + d.percentage,
+    0,
+  );
   const remaining = 100 - totalDistributed;
 
   // Prepare chart data
   const chartData = [
     ...assetDistributions.map((distribution, index) => {
-      const heir = heirs.find(h => h.id === distribution.heirId);
+      const heir = heirs.find((h) => h.id === distribution.heirId);
       return {
         name: heir?.name || "Unknown Heir",
         value: distribution.percentage,
         fill: COLORS[index % COLORS.length],
       };
     }),
-    ...(remaining > 0 ? [{
-      name: "Unallocated",
-      value: remaining,
-      fill: "hsl(var(--muted))",
-    }] : [])
+    ...(remaining > 0
+      ? [
+          {
+            name: "Unallocated",
+            value: remaining,
+            fill: "hsl(var(--muted))",
+          },
+        ]
+      : []),
   ];
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
@@ -115,7 +127,9 @@ const AssetDistributionChart = ({ asset, heirs, distributions }: AssetDistributi
                               className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
                               style={{ backgroundColor: data.payload?.fill }}
                             />
-                            <span className="text-muted-foreground">{name}</span>
+                            <span className="text-muted-foreground">
+                              {name}
+                            </span>
                           </div>
                           <span className="font-mono font-medium tabular-nums text-foreground">
                             {value}%

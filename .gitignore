@@ -24,3 +24,8 @@ dist/
 # environment variables
 .env
 
+docs/
+official-doc/
+scripts/
+*.md
+!README.md

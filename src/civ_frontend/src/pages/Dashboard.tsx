@@ -1,7 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AssetsList } from "@/components/AssetsList";
 import { HeirsList } from "@/components/HeirsList";
@@ -15,17 +21,18 @@ import {
   LogOut,
   RefreshCw,
   PieChart,
-  Wallet
+  Wallet,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
+import Header from "@/components/Header";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { useSettings } from "@/context/SettingsContext";
 
 const Dashboard = () => {
   const { logout } = useAuth();
-  const [totalAssets, setTotalAssets] = useState(2850000);
   const [timerResetOpen, setTimerResetOpen] = useState(false);
+  const [totalAssets, setTotalAssets] = useState(2850000);
   const [loginTime] = useState<Date>(() => {
     const stored = localStorage.getItem("loginTime");
     return stored ? new Date(stored) : new Date();
@@ -48,7 +55,9 @@ const Dashboard = () => {
 
       if (diff > 0) {
         const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const hours = Math.floor(
+          (diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60),
+        );
         const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
 
         setTimeRemaining(`${days}d ${hours}h ${minutes}m`);
@@ -81,6 +90,10 @@ const Dashboard = () => {
     });
   };
 
+  const goToHeirView = () => {
+    navigate("/heir-view");
+  };
+
   // NOTE: kept for fallback sake
 
   // const formatCurrency = (amount: number) => {
@@ -92,9 +105,7 @@ const Dashboard = () => {
   //   }).format(amount);
   // };
 
-
-
-  //   TODO: test with backend 
+  //   TODO: test with backend
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -109,10 +120,6 @@ const Dashboard = () => {
                   className="w-full h-auto object-contain max-w-[80%] max-h-[75%]"
                 />
               </div>
-              {/* <div>
-                <h1 className="text-2xl font-bold text-foreground">InheritNext</h1>
-                <p className="text-sm text-muted-foreground">Inheritance Management System</p>
-              </div> */}
             </div>
             <div className="flex items-center space-x-4">
               <SettingsDialog />
@@ -125,10 +132,10 @@ const Dashboard = () => {
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Reset Timer
               </Button>
-              <Button variant="outline" size="sm" onClick={handleSignOut}>
-                <LogOut className="w-4 h-4 mr-2" />
-                Sign Out
-              </Button>
+              {/* Header component shows principal and sign-in controls */}
+              <div className="ml-2">
+                <Header />
+              </div>
             </div>
           </div>
         </div>
@@ -143,7 +150,9 @@ const Dashboard = () => {
                 <div className="flex items-center space-x-4">
                   <Clock className="w-8 h-8" />
                   <div>
-                    <h3 className="text-lg font-semibold">Inheritance Access Timer</h3>
+                    <h3 className="text-lg font-semibold">
+                      Inheritance Access Timer
+                    </h3>
                     <p className="text-primary-foreground/80">
                       Time remaining: {timeRemaining}
                     </p>
@@ -168,7 +177,9 @@ const Dashboard = () => {
         <div className="grid gap-6 md:grid-cols-3 mb-8">
           <Card className="shadow-card">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Assets</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                Total Assets
+              </CardTitle>
               <Wallet className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -201,9 +212,7 @@ const Dashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{heirs.length}</div>
-              <p className="text-xs text-muted-foreground">
-                Heirs
-              </p>
+              <p className="text-xs text-muted-foreground">Heirs</p>
             </CardContent>
           </Card>
         </div>
@@ -217,7 +226,10 @@ const Dashboard = () => {
             </h2>
             <Badge variant="secondary">Updated 2 hours ago</Badge>
           </div>
-          <AssetsList onTotalChange={setTotalAssets} onAssetsChange={setAssets} />
+          <AssetsList
+            onTotalChange={setTotalAssets}
+            onAssetsChange={setAssets}
+          />
         </div>
 
         {/* Heirs Section */}
@@ -235,7 +247,10 @@ const Dashboard = () => {
         {/* Asset Distribution  */}
         {assets.length > 0 && heirs.length > 0 && (
           <div className="mb-8">
-            <AssetDistribution assets={assets} heirs={heirs} />
+            <AssetDistribution
+              assets={assets}
+              heirs={heirs.map((h) => ({ id: h.gov_id_hash, name: h.name }))}
+            />
           </div>
         )}
       </main>
