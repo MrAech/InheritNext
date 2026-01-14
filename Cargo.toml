@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "src/InheritNext_backend"
+]
+resolver = "2"
