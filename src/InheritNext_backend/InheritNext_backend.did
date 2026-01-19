@@ -1,3 +1,35 @@
+type DeadManSwitch = record {
+  heartbeat_interval : nat64;
+  pending_since : opt nat64;
+  last_heartbeat : nat64;
+  grace_period : nat64;
+};
+type RecoveryConfig = record {
+  threshold : nat32;
+  recovery_principals : vec principal;
+};
+type Result = variant { Ok; Err : text };
+type Result_1 = variant { Ok : Vault; Err : text };
+type Result_2 = variant { Ok : UserProfile; Err : text };
+type UserProfile = record {
+  created_at : nat64;
+  first_name : text;
+  last_name : text;
+};
+type Vault = record {
+  dms : DeadManSwitch;
+  status : VaultStatus;
+  recovery_config : opt RecoveryConfig;
+  owner : principal;
+  created_at : nat64;
+  next_asset_id : nat64;
+};
+type VaultStatus = variant { Active; Released; NotCreated; Pending };
 service : {
-    "greet": (text) -> (text) query;
+  configure_dms : (nat32, nat32) -> (Result);
+  create_vault : () -> (Result);
+  get_my_vault : () -> (Result_1) query;
+  gt_profile : () -> (Result_2) query;
+  is_registered : () -> (bool) query;
+  register_user : (text, text) -> (Result);
 }
