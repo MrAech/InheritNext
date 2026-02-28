@@ -29,7 +29,8 @@ service : {
   configure_dms : (nat32, nat32) -> (Result);
   create_vault : () -> (Result);
   get_my_vault : () -> (Result_1) query;
-  gt_profile : () -> (Result_2) query;
+  get_profile : () -> (Result_2) query;
+  heartbeat : () -> (Result);
   is_registered : () -> (bool) query;
   register_user : (text, text) -> (Result);
 }

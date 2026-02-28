@@ -24,4 +24,6 @@ dist/
 # environment variable
 .env 
 **/icp-declarations/
-
+src/test_canister/
+src/test_nft_canister/
+TestScripts/
