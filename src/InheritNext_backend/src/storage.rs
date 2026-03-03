@@ -1,11 +1,15 @@
 use candid::Principal;
+
 use ic_stable_structures::{
     memory_manager::{MemoryId, MemoryManager, VirtualMemory},
-    DefaultMemoryImpl, StableBTreeMap,
+    DefaultMemoryImpl, StableBTreeMap, StableCell,
 };
 use std::cell::RefCell;
 
-use crate::types::{AuditEvent, EventId, StablePrincipal, UserProfile, Vault};
+use crate::{
+    helpers::MAX_AUDIT_EVENT,
+    types::{Asset, AssetId, AuditEvent, EventId, StablePrincipal, UserProfile, Vault},
+};
 type Memory = VirtualMemory<DefaultMemoryImpl>;
 
 thread_local! {
@@ -32,8 +36,24 @@ thread_local! {
         StableBTreeMap::init(MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(2))))
     );
 
+    static ASSETS: RefCell<StableBTreeMap<AssetId, Asset, Memory >> = RefCell::new(
+        StableBTreeMap::init(
+            MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(3)))
+        )
+    );
 
-    static NEXT_EVENT_ID: RefCell<u64> = RefCell::new(0);
+
+
+    static NEXT_EVENT_ID: RefCell<StableCell<u64, Memory>> =
+    RefCell::new(
+        StableCell::init(MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(5))), 0)
+    );
+
+    static NEXT_ASSET_ID: RefCell<StableCell<u64, Memory>> =
+    RefCell::new(
+        StableCell::init(MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(6))), 0)
+    );
+
 }
 
 fn return_stable_prin(p: &Principal) -> StablePrincipal {
@@ -78,15 +98,23 @@ pub fn insert_vault(owner: &Principal, vault: Vault) {
 
 pub fn log_event(event: AuditEvent) -> EventId {
     let event_id = NEXT_EVENT_ID.with(|id| {
-        let current = *id.borrow();
-        *id.borrow_mut() = current + 1;
+        let mut cell = id.borrow_mut();
+        let current = *cell.get();
+        let _ = cell.set(current + 1);
         EventId(current)
     });
 
     AUDIT_LOG.with(|log| {
-        log.borrow_mut().insert(event_id, event);
-    });
+        let mut log = log.borrow_mut();
+        log.insert(event_id, event);
 
+        if log.len() > MAX_AUDIT_EVENT {
+            let oldest_id = log.iter().next().map(|entry| *entry.key());
+            if let Some(id) = oldest_id {
+                log.remove(&id);
+            }
+        }
+    });
     event_id
 }
 
@@ -106,5 +134,44 @@ where
 
         vaults.insert(*key, vault);
         Ok(res)
+    })
+}
+
+pub fn insert_asset(asset: Asset) {
+    ASSETS.with(|assets| {
+        assets.borrow_mut().insert(AssetId(asset.id), asset);
+    });
+}
+
+pub fn get_asset(asset_id: u64) -> Option<Asset> {
+    ASSETS.with(|assets| assets.borrow().get(&AssetId(asset_id)))
+}
+
+pub fn remove_asset(asset_id: u64) -> Option<Asset> {
+    ASSETS.with(|assets| assets.borrow_mut().remove(&AssetId(asset_id)))
+}
+
+pub fn list_user_assets(owner: &Principal) -> Vec<Asset> {
+    let mut result = Vec::new();
+    ASSETS.with(|assets| {
+        let assets = assets.borrow();
+        for item in assets.iter() {
+            let value = item.value();
+            if value.owner == *owner {
+                result.push(value);
+            }
+        }
+    });
+    result
+}
+
+// Global Counter to prevent assetid to being same
+
+pub fn next_asset_id() -> u64 {
+    NEXT_ASSET_ID.with(|id| {
+        let mut cell = id.borrow_mut();
+        let current = *cell.get();
+        let _ = cell.set(current + 1);
+        current
     })
 }
