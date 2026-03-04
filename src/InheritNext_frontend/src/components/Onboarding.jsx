@@ -70,6 +70,7 @@ export const Onboarding = ({ onSubmit, isLoading }) => {
           description: "Please enter your first and last name.",
           status: "error",
           duration: 3000,
+          isClosable: true
         });
         return;
       }
@@ -81,6 +82,7 @@ export const Onboarding = ({ onSubmit, isLoading }) => {
           description: "You must acknowledge the purpose of this application.",
           status: "error",
           duration: 3000,
+          isClosable: true
         });
         return;
       }

@@ -1,8 +1,10 @@
 use candid::Principal;
 
 use crate::{
-    helpers::{now, DEFAULT_GRACE_PERIOD, DEFAULT_HEARTBEAT_INTERVAL, NANOS_PER_DAY},
-    storage::{self, insert_vault, vault_exists},
+    helpers::{
+        is_vault_released, now, DEFAULT_GRACE_PERIOD, DEFAULT_HEARTBEAT_INTERVAL, NANOS_PER_DAY,
+    },
+    storage::{self, insert_vault, update_vault, vault_exists},
     types::{DeadManSwitch, Vault, VaultStatus},
 };
 
@@ -15,7 +17,7 @@ pub fn create_new_vault(caller: &Principal) -> Result<(), String> {
     insert_vault(
         caller,
         Vault {
-            owner: caller.clone(),
+            owner: *caller,
             created_at: cur_time,
             status: VaultStatus::Active,
             dms: DeadManSwitch {
@@ -48,6 +50,21 @@ pub fn configure_switch(
 
         vault.dms.heartbeat_interval = (heartbeat_intervals_d as u64) * NANOS_PER_DAY;
         vault.dms.grace_period = (grace_period_d as u64) * NANOS_PER_DAY;
+
+        Ok(())
+    })
+}
+
+pub fn send_heartbeat(caller: &Principal) -> Result<(), String> {
+    // println!("heartbeat SEND ===========================");
+    update_vault(caller, |vault| {
+        if is_vault_released(vault) {
+            return Err("Vault Already Released".to_string());
+        }
+        let cur_time = now();
+        vault.dms.last_heartbeat = cur_time;
+        vault.dms.pending_since = None;
+        vault.status = VaultStatus::Active;
 
         Ok(())
     })
