@@ -44,7 +44,7 @@ export const Onboarding = ({ onSubmit, isLoading }) => {
     index: 0,
     count: STEPS.length,
   });
-  
+
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -70,7 +70,7 @@ export const Onboarding = ({ onSubmit, isLoading }) => {
           description: "Please enter your first and last name.",
           status: "error",
           duration: 3000,
-          isClosable: true
+          isClosable: true,
         });
         return;
       }
@@ -82,7 +82,7 @@ export const Onboarding = ({ onSubmit, isLoading }) => {
           description: "You must acknowledge the purpose of this application.",
           status: "error",
           duration: 3000,
-          isClosable: true
+          isClosable: true,
         });
         return;
       }
@@ -110,10 +110,12 @@ export const Onboarding = ({ onSubmit, isLoading }) => {
         return (
           <VStack spacing={6} align="stretch">
             <Box textAlign="center" mb={4}>
-                <Heading size="md" color="brand.700" mb={2}>
+              <Heading size="md" color="brand.700" mb={2}>
                 Identity Setup
-                </Heading>
-                <Text color="gray.500" fontSize="sm">Please provide your real name for your heirs to recognize.</Text>
+              </Heading>
+              <Text color="gray.500" fontSize="sm">
+                Please provide your real name for your heirs to recognize.
+              </Text>
             </Box>
             <FormControl id="firstName" isRequired>
               <FormLabel fontWeight="bold" color="gray.700">
@@ -147,10 +149,10 @@ export const Onboarding = ({ onSubmit, isLoading }) => {
       case 1: // Purpose
         return (
           <VStack spacing={6} textAlign="left" align="stretch">
-             <Box textAlign="center" mb={4}>
-                <Heading size="md" color="brand.700" mb={2}>
+            <Box textAlign="center" mb={4}>
+              <Heading size="md" color="brand.700" mb={2}>
                 Purpose & Responsibility
-                </Heading>
+              </Heading>
             </Box>
             <Alert
               status="warning"
@@ -169,14 +171,14 @@ export const Onboarding = ({ onSubmit, isLoading }) => {
                 Irreversible Action
               </AlertTitle>
               <AlertDescription maxWidth="sm" color="orange.700">
-                This application acts as a digital <b>Dead Man's Switch</b>. If you
-                fail to check in, your stored secrets <b>will be released</b> to
-                your designated heirs. This process cannot be undone once
-                triggered.
+                This application acts as a digital <b>Dead Man's Switch</b>. If
+                you fail to check in, your stored secrets{" "}
+                <b>will be released</b> to your designated heirs. This process
+                cannot be undone once triggered.
               </AlertDescription>
             </Alert>
             <Box p={4} bg="gray.50" borderRadius="md">
-                <Checkbox
+              <Checkbox
                 name="purposeAcknowledged"
                 isChecked={formData.purposeAcknowledged}
                 onChange={handleInputChange}
@@ -184,9 +186,12 @@ export const Onboarding = ({ onSubmit, isLoading }) => {
                 size="lg"
                 spacing={4}
                 alignItems="start"
-                >
-                <Text fontSize="sm" fontWeight="bold" pt={1}>I understand that this app creates an automated release mechanism.</Text>
-                </Checkbox>
+              >
+                <Text fontSize="sm" fontWeight="bold" pt={1}>
+                  I understand that this app creates an automated release
+                  mechanism.
+                </Text>
+              </Checkbox>
             </Box>
           </VStack>
         );
@@ -194,30 +199,36 @@ export const Onboarding = ({ onSubmit, isLoading }) => {
       case 2: // Review
         return (
           <VStack spacing={6} align="stretch">
-             <Box textAlign="center" mb={4}>
-                <Heading size="md" color="brand.700" mb={2}>
+            <Box textAlign="center" mb={4}>
+              <Heading size="md" color="brand.700" mb={2}>
                 Review & Confirm
-                </Heading>
+              </Heading>
             </Box>
             <Card variant="outline" bg="gray.50">
-                <CardBody>
-                    <Stack spacing={4}>
-                        <HStack justify="space-between">
-                        <Text fontWeight="bold" color="gray.600">Name</Text>
-                        <Text fontWeight="medium">
-                            {formData.firstName} {formData.lastName}
-                        </Text>
-                        </HStack>
-                        <Divider />
-                        <HStack justify="space-between">
-                             <Text fontWeight="bold" color="gray.600">Acknowledgement</Text>
-                             <Text color="green.600" fontWeight="bold">Signed</Text>
-                        </HStack>
-                    </Stack>
-                </CardBody>
+              <CardBody>
+                <Stack spacing={4}>
+                  <HStack justify="space-between">
+                    <Text fontWeight="bold" color="gray.600">
+                      Name
+                    </Text>
+                    <Text fontWeight="medium">
+                      {formData.firstName} {formData.lastName}
+                    </Text>
+                  </HStack>
+                  <Divider />
+                  <HStack justify="space-between">
+                    <Text fontWeight="bold" color="gray.600">
+                      Acknowledgement
+                    </Text>
+                    <Text color="green.600" fontWeight="bold">
+                      Signed
+                    </Text>
+                  </HStack>
+                </Stack>
+              </CardBody>
             </Card>
-             <Text fontSize="xs" color="gray.500" textAlign="center">
-                  By creating an account, you agree to the Terms of Service.
+            <Text fontSize="xs" color="gray.500" textAlign="center">
+              By creating an account, you agree to the Terms of Service.
             </Text>
           </VStack>
         );
@@ -239,36 +250,40 @@ export const Onboarding = ({ onSubmit, isLoading }) => {
             </Text>
           </Box>
 
-            <Box mb={8}>
-                <Stepper index={activeStep} colorScheme="brand">
-                    {STEPS.map((step, index) => (
-                    <Step key={index}>
-                        <StepIndicator>
-                        <StepStatus
-                            complete={<StepIcon />}
-                            incomplete={<StepNumber />}
-                            active={<StepNumber />}
-                        />
-                        </StepIndicator>
+          <Box mb={8}>
+            <Stepper index={activeStep} colorScheme="brand">
+              {STEPS.map((step, index) => (
+                <Step key={index}>
+                  <StepIndicator>
+                    <StepStatus
+                      complete={<StepIcon />}
+                      incomplete={<StepNumber />}
+                      active={<StepNumber />}
+                    />
+                  </StepIndicator>
 
-                        <Box flexShrink='0'>
-                        <StepTitle>{step.title}</StepTitle>
-                        <StepDescription>{step.description}</StepDescription>
-                        </Box>
+                  <Box flexShrink="0">
+                    <StepTitle>{step.title}</StepTitle>
+                    <StepDescription>{step.description}</StepDescription>
+                  </Box>
 
-                        <StepSeparator />
-                    </Step>
-                    ))}
-                </Stepper>
-            </Box>
+                  <StepSeparator />
+                </Step>
+              ))}
+            </Stepper>
+          </Box>
 
-          <Card boxShadow="xl" bg="white" borderRadius="2xl" border="1px" borderColor="gray.100">
+          <Card
+            boxShadow="xl"
+            bg="white"
+            borderRadius="2xl"
+            border="1px"
+            borderColor="gray.100"
+          >
             <CardBody p={8}>
               <form onSubmit={handleSubmit}>
                 <VStack spacing={8} minH="350px" justify="space-between">
-                  <Box w="full">
-                    {renderStepContent()}
-                  </Box>
+                  <Box w="full">{renderStepContent()}</Box>
 
                   <HStack justify="space-between" w="full" pt={4}>
                     <Button
@@ -292,7 +307,12 @@ export const Onboarding = ({ onSubmit, isLoading }) => {
                         Create Account
                       </Button>
                     ) : (
-                      <Button onClick={handleNext} size="lg" colorScheme="brand" px={8}>
+                      <Button
+                        onClick={handleNext}
+                        size="lg"
+                        colorScheme="brand"
+                        px={8}
+                      >
                         Next
                       </Button>
                     )}
@@ -306,4 +326,3 @@ export const Onboarding = ({ onSubmit, isLoading }) => {
     </Box>
   );
 };
-

@@ -1,11 +1,17 @@
 use candid::Principal;
+use ic_cdk::call::Call;
+use icrc_ledger_types::{
+    icrc1::account::Account,
+    icrc2::allowance::{Allowance, AllowanceArgs},
+};
 
 use crate::{
     helpers::{
-        is_vault_released, now, DEFAULT_GRACE_PERIOD, DEFAULT_HEARTBEAT_INTERVAL, NANOS_PER_DAY,
+        is_vault_released, log_event, now, DEFAULT_GRACE_PERIOD, DEFAULT_HEARTBEAT_INTERVAL,
+        NANOS_PER_DAY,
     },
     storage::{self, insert_vault, update_vault, vault_exists},
-    types::{DeadManSwitch, Vault, VaultStatus},
+    types::{DeadManSwitch, EventType, Vault, VaultStatus},
 };
 
 pub fn create_new_vault(caller: &Principal) -> Result<(), String> {
@@ -68,4 +74,67 @@ pub fn send_heartbeat(caller: &Principal) -> Result<(), String> {
 
         Ok(())
     })
+}
+
+pub async fn verify_icrc2_allowance(
+    caller: &Principal,
+    ledger_canister: &Principal,
+    amount: u64,
+) -> Result<(), String> {
+    let backend_canister = ic_cdk::api::canister_self();
+    let allowance_args = AllowanceArgs {
+        account: Account {
+            owner: *caller,
+            subaccount: None,
+        },
+        spender: Account {
+            owner: backend_canister,
+            subaccount: None,
+        },
+    };
+
+    let response = Call::unbounded_wait(*ledger_canister, "icrc2_allowance")
+        .with_arg(allowance_args)
+        .await;
+
+    let check_result: Result<(Allowance,), _> = match response {
+        Ok(resp) => resp.candid_tuple().map_err(|e| {
+            (
+                ic_cdk::call::RejectCode::CanisterError,
+                format!("Failed to decode response: {:?}", e),
+            )
+        }),
+        Err(e) => Err((
+            ic_cdk::call::RejectCode::CanisterError,
+            format!("Call failed: {:?}", e),
+        )),
+    };
+
+    match check_result {
+        Ok((allowance,)) => {
+            let req = candid::Nat::from(amount);
+            if allowance.allowance < req {
+                return Err(format!(
+                    "Insufficient allowance. Required: {}, Current: {}. Please approve the backend canister: dfx canister call {} icrc2_approve '(record{{spender=record{{owner=principal\\\"{}\\\";subaccount=null}};amount={}}})' ",
+                    req, allowance.allowance, ledger_canister.to_text(), backend_canister.to_text(), amount
+                ));
+            }
+
+            log_event(
+                EventType::AssetUpdated,
+                caller,
+                format!(
+                    "ICRC-2 allowance verified: {} tokens approved on {}",
+                    allowance.allowance,
+                    ledger_canister.to_text()
+                ),
+            );
+            Ok(())
+        }
+        Err(e) => Err(format!(
+            "Could not verify allowance from ledger {}. Error: {:?}. Please ensure the ledger supports ICRC-2.",
+            ledger_canister.to_text(),
+            e
+        )),
+    }
 }

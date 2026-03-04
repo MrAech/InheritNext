@@ -162,3 +162,70 @@ impl Storable for EventId {
         is_fixed_size: true,
     };
 }
+
+#[derive(
+    Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, CandidType, Serialize, Deserialize, Debug,
+)]
+pub struct AssetId(pub u64);
+
+impl Storable for AssetId {
+    fn to_bytes(&self) -> Cow<'_, [u8]> {
+        Cow::Owned(self.0.to_be_bytes().to_vec())
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        self.0.to_be_bytes().to_vec()
+    }
+
+    fn from_bytes(bytes: Cow<[u8]>) -> Self {
+        let mut arr = [0u8; 8];
+        arr.copy_from_slice(&bytes);
+        AssetId(u64::from_be_bytes(arr))
+    }
+
+    const BOUND: Bound = Bound::Bounded {
+        max_size: 8,
+        is_fixed_size: true,
+    };
+}
+
+#[derive(Clone, Serialize, Deserialize, CandidType, PartialEq, Debug)]
+pub enum AssetType {
+    ICRC2Token {
+        ledger_canister: Principal,
+        amount: u64,
+    },
+}
+
+#[derive(Clone, Serialize, Deserialize, CandidType, PartialEq, Debug)]
+pub struct HeirAssignment {
+    pub heir_principal: Principal,
+    pub percentage: u8,
+}
+
+#[derive(Clone, Serialize, Deserialize, CandidType, PartialEq, Debug)]
+pub struct Asset {
+    pub id: u64,
+    pub owner: Principal,
+    pub asset_type: AssetType,
+    pub name: String,
+    pub description: String,
+    pub created_at: u64,
+    pub heir_assingment: Vec<HeirAssignment>,
+}
+
+impl Storable for Asset {
+    fn to_bytes(&self) -> Cow<'_, [u8]> {
+        Cow::Owned(candid::encode_one(self).expect("Failed to encode Asset"))
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        candid::encode_one(self).expect("Failed to encode Asset")
+    }
+
+    fn from_bytes(bytes: Cow<'_, [u8]>) -> Self {
+        candid::decode_one(&bytes).expect("Failed to decode Asset - storage corruption detected")
+    }
+
+    const BOUND: Bound = Bound::Unbounded;
+}

@@ -1,16 +1,31 @@
+type Asset = record {
+  id : nat64;
+  asset_type : AssetType;
+  owner : principal;
+  name : text;
+  description : text;
+  created_at : nat64;
+  heir_assingment : vec HeirAssignment;
+};
+type AssetType = variant {
+  ICRC2Token : record { ledger_canister : principal; amount : nat64 };
+};
 type DeadManSwitch = record {
   heartbeat_interval : nat64;
   pending_since : opt nat64;
   last_heartbeat : nat64;
   grace_period : nat64;
 };
+type HeirAssignment = record { heir_principal : principal; percentage : nat8 };
 type RecoveryConfig = record {
   threshold : nat32;
   recovery_principals : vec principal;
 };
-type Result = variant { Ok; Err : text };
-type Result_1 = variant { Ok : Vault; Err : text };
-type Result_2 = variant { Ok : UserProfile; Err : text };
+type Result = variant { Ok : nat64; Err : text };
+type Result_1 = variant { Ok; Err : text };
+type Result_2 = variant { Ok : Asset; Err : text };
+type Result_3 = variant { Ok : Vault; Err : text };
+type Result_4 = variant { Ok : UserProfile; Err : text };
 type UserProfile = record {
   created_at : nat64;
   first_name : text;
@@ -26,11 +41,15 @@ type Vault = record {
 };
 type VaultStatus = variant { Active; Released; NotCreated; Pending };
 service : {
-  configure_dms : (nat32, nat32) -> (Result);
-  create_vault : () -> (Result);
-  get_my_vault : () -> (Result_1) query;
-  get_profile : () -> (Result_2) query;
-  heartbeat : () -> (Result);
+  add_asset : (text, text, AssetType, vec HeirAssignment) -> (Result);
+  configure_dms : (nat32, nat32) -> (Result_1);
+  create_vault : () -> (Result_1);
+  get_asset_by_id : (nat64) -> (Result_2) query;
+  get_my_vault : () -> (Result_3) query;
+  get_profile : () -> (Result_4) query;
+  heartbeat : () -> (Result_1);
   is_registered : () -> (bool) query;
-  register_user : (text, text) -> (Result);
+  list_my_assets : () -> (vec Asset) query;
+  register_user : (text, text) -> (Result_1);
+  remove_asset_by_id : (nat64) -> (Result_1);
 }
