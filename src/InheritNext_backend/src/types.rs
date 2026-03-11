@@ -107,6 +107,7 @@ pub enum EventType {
     AssetDeleted,
     HeirAdded,
     HeirRemoved,
+    HeirUpdated,
     Heartbeat,
     SwitchPending,
     VaultReleased,
@@ -225,6 +226,35 @@ impl Storable for Asset {
 
     fn from_bytes(bytes: Cow<'_, [u8]>) -> Self {
         candid::decode_one(&bytes).expect("Failed to decode Asset - storage corruption detected")
+    }
+
+    const BOUND: Bound = Bound::Unbounded;
+}
+
+#[derive(Clone, Serialize, Deserialize, CandidType, PartialEq, Debug)]
+pub struct Heir {
+    pub heir_prin: Principal,
+    pub name: String,
+    pub allocation_percentage: u8,
+}
+
+#[derive(Clone, Serialize, Deserialize, CandidType, PartialEq, Debug)]
+pub struct HeirsList {
+    pub heirs: Vec<Heir>,
+}
+
+impl Storable for HeirsList {
+    fn to_bytes(&self) -> Cow<'_, [u8]> {
+        Cow::Owned(candid::encode_one(self).expect("Failed to encode HeirsList"))
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        candid::encode_one(self).expect("Failed to encode HeirsList")
+    }
+
+    fn from_bytes(bytes: Cow<'_, [u8]>) -> Self {
+        candid::decode_one(&bytes)
+            .expect("Failed to decode HeirsList - storage corruption detected")
     }
 
     const BOUND: Bound = Bound::Unbounded;

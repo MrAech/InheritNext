@@ -8,7 +8,9 @@ use std::cell::RefCell;
 
 use crate::{
     helpers::MAX_AUDIT_EVENT,
-    types::{Asset, AssetId, AuditEvent, EventId, StablePrincipal, UserProfile, Vault},
+    types::{
+        Asset, AssetId, AuditEvent, EventId, Heir, HeirsList, StablePrincipal, UserProfile, Vault,
+    },
 };
 type Memory = VirtualMemory<DefaultMemoryImpl>;
 
@@ -42,6 +44,10 @@ thread_local! {
         )
     );
 
+    static HEIRS: RefCell<StableBTreeMap<StablePrincipal, HeirsList, Memory>> =
+    RefCell::new(
+        StableBTreeMap::init(MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(4))))
+    );
 
 
     static NEXT_EVENT_ID: RefCell<StableCell<u64, Memory>> =
@@ -163,6 +169,24 @@ pub fn list_user_assets(owner: &Principal) -> Vec<Asset> {
         }
     });
     result
+}
+
+pub fn get_heirs(owner: &Principal) -> Vec<Heir> {
+    HEIRS.with(|heirs| {
+        heirs
+            .borrow()
+            .get(&return_stable_prin(owner))
+            .map(|list| list.heirs)
+            .unwrap_or_default()
+    })
+}
+
+pub fn insert_heirs(owner: &Principal, heirs_list: Vec<Heir>) {
+    HEIRS.with(|heirs| {
+        heirs
+            .borrow_mut()
+            .insert(return_stable_prin(owner), HeirsList { heirs: heirs_list });
+    });
 }
 
 // Global Counter to prevent assetid to being same

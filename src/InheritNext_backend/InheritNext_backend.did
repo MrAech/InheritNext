@@ -42,6 +42,7 @@ type Vault = record {
 type VaultStatus = variant { Active; Released; NotCreated; Pending };
 service : {
   add_asset : (text, text, AssetType, vec HeirAssignment) -> (Result);
+  add_heir : (principal, text, nat8) -> (Result_1);
   configure_dms : (nat32, nat32) -> (Result_1);
   create_vault : () -> (Result_1);
   get_asset_by_id : (nat64) -> (Result_2) query;
@@ -52,4 +53,6 @@ service : {
   list_my_assets : () -> (vec Asset) query;
   register_user : (text, text) -> (Result_1);
   remove_asset_by_id : (nat64) -> (Result_1);
+  remove_heir : (principal) -> (Result_1);
+  update_heir : (principal, opt text, opt nat8) -> (Result_1);
 }
