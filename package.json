@@ -9,10 +9,12 @@
     "prebuild": "npm run prebuild --workspaces --if-present",
     "pretest": "npm run prebuild --workspaces --if-present",
     "start": "npm start --workspaces --if-present",
-    "test": "npm test --workspaces --if-present"
+    "test": "npm test --workspaces --if-present",
+    "generate": "cd src/InheritNext_frontend && npm run generate"
   },
   "type": "module",
   "workspaces": [
     "src/InheritNext_frontend"
   ]
 }
+

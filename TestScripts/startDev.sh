@@ -10,7 +10,7 @@ echo "=============================================="
 
 echo "Starting dfx locally"
 
-if dfx ping; then
+if dfx ping >/dev/null 2>&1; then
     echo "-> DFX running Stopping it and reRunning"
     dfx stop
 else
